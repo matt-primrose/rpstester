@@ -23,10 +23,10 @@ limitations under the License.
 'use strict';
 const fs = require('fs');
 const rcsTesterVersion = '0.0.1';
+const settings = new Object();
 // Execute based on incoming arguments
 function run(argv) {
     let args = parseArguments(argv);
-    let settings = new Object();
     if ((typeof args.url) == 'string') { settings.url = args.url ;}
     if ((typeof args.num) == 'string') { settings.num = parseInt(args.num); }
     if ((args.url == undefined) || (args.num == undefined)){
@@ -49,7 +49,43 @@ function consoleHelp(){
 
 function startTest(){
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
-    
+    connectToServer(testfile.messages[0]);
+}
+
+function connectToServer(message){
+    let WebSocket = require('ws');
+    let ws = new WebSocket(settings.url);
+    ws.on('open', function(){
+        ws.send(JSON.stringify(message));
+    });
+    ws.on('message', function(data){
+        console.log('message received');
+        let cmd = null;
+        try {
+            cmd = JSON.parse(data);
+        } catch(ex){
+            console.log('Unable to parse server response: ' + data);
+        }
+        if (typeof cmd != 'object') { console.log('Invalid server response: ' + cmd); }
+        if (typeof cmd.errorText == 'string') { console.log('Server error: ' + cmd.errorText); }
+        switch (cmd.action){
+            case 'acmactivate': {
+                console.log('acmactivate response: ' + JSON.stringify(cmd));
+                ws.close();
+                break;
+            }
+            case 'ccmactivate': {
+                console.log('ccmactivate response: ' + JSON.stringify(cmd));
+                ws.close();
+                break;
+            }
+            default: {
+                console.log('Invalid server response, command: ' + cmd.action);
+                ws.close();
+                break;
+            }
+        }
+    });
 }
 
 // Figure out if any arguments were provided, otherwise show help
