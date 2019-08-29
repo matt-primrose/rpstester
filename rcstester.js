@@ -28,6 +28,9 @@ const settings = new Object();
 let emulatedClients;
 let completedTests;
 let requestedTests;
+let failedTests;
+let passedTests;
+let numTestPatterns;
 let acmTests;
 let ccmTests;
 // Execute based on incoming arguments
@@ -56,21 +59,31 @@ function consoleHelp(){
 function startTest(){
     emulatedClients = new Object();
     completedTests = 0;
+    failedTests = 0;
+    passedTests = 0;
     acmTests = 0;
     ccmTests = 0;
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
     let testPattern = 0;
+    numTestPatterns = testfile.messages.length;
     for (let x = 0; x < settings.num; x++){
-        if (testPattern == 1){ testPattern = 0; } else { testPattern = 1; }
+        if (testPattern == numTestPatterns){ testPattern = 0; }
         generateTestClientInformation(testfile.messages[testPattern], function(uuid, message){
             emulatedClients[uuid] = message;
         });
+        testPattern++;
     }
     for (let x in emulatedClients){
-        connectToServer(emulatedClients[x], function(resp){
+        connectToServer(emulatedClients[x], function(resp, testComplete, testPass, testType){
             let guidCheck = false;
+            let verifyNonce = nonceCheck(resp.nonce, resp.signature);
             if (emulatedClients[x].uuid == resp.uuid) { guidCheck = true; }
+            testPass = (testPass && guidCheck && verifyNonce);
+            recordTestResults(testComplete, testPass, testType);
+            if (completedTests == requestedTests) {
+                processTestResults(requestedTests, completedTests, acmTests, ccmTests);
+            }
             //console.log('Client UUID: ' + resp.uuid + '\n\rStatus: '+ resp.status + '\n\rAction: ' + resp.action + '\n\rRCS Nonce: ' + resp.nonce + '\n\rNonce Verification: '+ nonceCheck(resp.nonce, resp.signature) + '\n\rGuid Check: ' + guidCheck);
         });
     }
@@ -120,10 +133,7 @@ function connectToServer(message, callback){
         }
         if (typeof cmd.errorText == 'string') { 
             console.log('Server error: ' + cmd.errorText); 
-            completedTests++; 
-            if (completedTests == requestedTests) {
-                processTestResults(requestedTests, completedTests, acmTests, ccmTests);
-            }
+            callback(cmd, true, false, null);
             if (emulatedClients[cmd.uuid]){
                 emulatedClients[cmd.uuid].tunnel.close();
             }
@@ -133,15 +143,10 @@ function connectToServer(message, callback){
                 if (callback) { callback(cmd); }
                 for (let x in emulatedClients){
                     if (cmd.uuid == emulatedClients[x].uuid){
-                        emulatedClients[x].tunnel.close();
-                        completedTests++;
-                        acmTests++;
-                        if (completedTests == requestedTests) {
-                            processTestResults(requestedTests, completedTests, acmTests, ccmTests);
-                        }
                         let response = {client:'meshcmd', version: 1, uuid: emulatedClients[x].uuid, action: 'acmactivate-success'};
-                        console.log(response);
                         emulatedClients[x].tunnel.send(JSON.stringify(response));
+                        emulatedClients[x].tunnel.close();
+                        callback(cmd, true, true, 'acm');
                     }
                 }
                 break;
@@ -150,15 +155,10 @@ function connectToServer(message, callback){
                 if (callback) { callback(cmd); }
                 for (let x in emulatedClients){
                     if (cmd.uuid == emulatedClients[x].uuid){
-                        emulatedClients[x].tunnel.close();
-                        completedTests++;
-                        ccmTests++;
-                        if (completedTests == requestedTests) {
-                            processTestResults(requestedTests, completedTests, acmTests, ccmTests);
-                        }
                         let response = {client:'meshcmd', version: 1, uuid: emulatedClients[x].uuid, action: 'ccmactivate-success'};
-                        console.log(response);
                         emulatedClients[x].tunnel.send(JSON.stringify(response));
+                        emulatedClients[x].tunnel.close();
+                        callback(cmd, true, true, 'ccm');
                     }
                 }
                 break;
@@ -190,13 +190,22 @@ function generateUuid(){
     return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.randomFillSync(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 }
 
+function recordTestResults(testComplete, testPass, testType){
+    if (testComplete == true) { completedTests++ ;}
+    if (testPass == true) { passedTests++; }
+    if (testPass == false) { failedTests++; }
+    if (testType == 'acm') { acmTests++; }
+    if (testType == 'ccm') { ccmTests++; }
+}
+
 function processTestResults(requestedTests, completedTests, acmTests, ccmTests){
     console.log('Test run complete!');
-    console.log('Tests requested:       ' + requestedTests);
-    console.log('Passing tests:         ' + (acmTests + ccmTests));
-    console.log('Failing tests:         ' + (completedTests - (acmTests + ccmTests)));
-    console.log('ACM tests completed:   ' + acmTests);
-    console.log('CCM tests completed:   ' + ccmTests);
+    console.log('Test Configurations Run:   ' + numTestPatterns);
+    console.log('Tests requested:           ' + requestedTests);
+    console.log('Passing tests:             ' + (acmTests + ccmTests));
+    console.log('Failing tests:             ' + (completedTests - (acmTests + ccmTests)));
+    console.log('ACM tests completed:       ' + acmTests);
+    console.log('CCM tests completed:       ' + ccmTests);
 }
 
 // Figure out if any arguments were provided, otherwise show help
