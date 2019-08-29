@@ -84,7 +84,6 @@ function startTest(){
             if (completedTests == requestedTests) {
                 processTestResults(requestedTests, completedTests, acmTests, ccmTests);
             }
-            //console.log('Client UUID: ' + resp.uuid + '\n\rStatus: '+ resp.status + '\n\rAction: ' + resp.action + '\n\rRCS Nonce: ' + resp.nonce + '\n\rNonce Verification: '+ nonceCheck(resp.nonce, resp.signature) + '\n\rGuid Check: ' + guidCheck);
         });
     }
 }
@@ -202,10 +201,10 @@ function processTestResults(requestedTests, completedTests, acmTests, ccmTests){
     console.log('Test run complete!');
     console.log('Test Configurations Run:   ' + numTestPatterns);
     console.log('Tests requested:           ' + requestedTests);
-    console.log('Passing tests:             ' + (acmTests + ccmTests));
-    console.log('Failing tests:             ' + (completedTests - (acmTests + ccmTests)));
-    console.log('ACM tests completed:       ' + acmTests);
-    console.log('CCM tests completed:       ' + ccmTests);
+    console.log('Successful results:        ' + (acmTests + ccmTests));
+    console.log('Unsuccessful results:      ' + (completedTests - (acmTests + ccmTests)));
+    console.log('ACM tests ran:             ' + acmTests);
+    console.log('CCM tests ran:             ' + ccmTests);
 }
 
 // Figure out if any arguments were provided, otherwise show help
