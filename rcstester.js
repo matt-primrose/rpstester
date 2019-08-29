@@ -53,17 +53,10 @@ function startTest(){
     emulatedClients = new Object();
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
     for (let x = 0; x < settings.num; x++){
-        let test = new Object();
-        test = testfile.messages[1];
-        test.nonce = generateFWNonce();
-        //console.log(test.nonce);
-        test.uuid = generateUuid();
-        //console.log(test.uuid);
-        //console.log(test);
-        emulatedClients[test.uuid] = test;
-        //console.log(emulatedClients[x]);
+        generateTestClientInformation(testfile.messages[0], function(uuid, message){
+            emulatedClients[uuid] = message;
+        });
     }
-    console.log(emulatedClients);
     for (let x in emulatedClients){
         connectToServer(emulatedClients[x], function(resp){
             let guidCheck = false;
@@ -71,6 +64,22 @@ function startTest(){
             console.log('Client UUID: ' + resp.uuid + '\n\rStatus: '+ resp.status + '\n\rAction: ' + resp.action + '\n\rRCS Nonce: ' + resp.nonce + '\n\rNonce Verification: '+ nonceCheck(resp.nonce, resp.signature) + '\n\rGuid Check: ' + guidCheck);
         });
     }
+}
+
+function generateTestClientInformation(testMessage, callback){
+    let message = new Object();
+    message.client = testMessage.client;
+    message.action = testMessage.action;
+    message.profile = testMessage.profile;
+    message.fqdn = testMessage.fqdn;
+    message.realm = testMessage.realm;
+    message.hashes = testMessage.hashes;
+    message.ver = testMessage.ver;
+    message.modes = testMessage.modes;
+    message.currentMode = testMessage.currentMode;
+    message.nonce = generateFWNonce();
+    message.uuid = generateUuid();
+    callback(message.uuid, message);
 }
 
 function nonceCheck(nonce, signature){
@@ -82,12 +91,12 @@ function connectToServer(message, callback){
     let WebSocket = require('ws');
     let ws = new WebSocket(settings.url);
     ws.on('open', function(){
-        // for (let x = 0; x < emulatedClients.length; x++){
-        //     if (message.uuid == emulatedClients[x].uuid){
-        //         emulatedClients[x].tunnel = ws;
-        //         emulatedClients[x].tunnel.send(JSON.stringify(message));
-        //     }
-        // }
+        for (let x in emulatedClients){
+            if (message.uuid == emulatedClients[x].uuid){
+                emulatedClients[x].tunnel = ws;
+                emulatedClients[x].tunnel.send(JSON.stringify(message));
+            }
+        }
     });
     ws.on('message', function(data){
         let cmd = null;
@@ -100,27 +109,27 @@ function connectToServer(message, callback){
         if (typeof cmd.errorText == 'string') { console.log('Server error: ' + cmd.errorText); }
         switch (cmd.action){
             case 'acmactivate': {
-                // if (callback) { callback(cmd); }
-                // for (let x = 0; x < emulatedClients.length; x++){
-                //     if (cmd.uuid == emulatedClients[x].uuid){
-                //         emulatedClients[x].tunnel.close();
-                //     }
-                // }
-                // break;
+                if (callback) { callback(cmd); }
+                for (let x in emulatedClients){
+                    if (cmd.uuid == emulatedClients[x].uuid){
+                        emulatedClients[x].tunnel.close();
+                    }
+                }
+                break;
             }
             case 'ccmactivate': {
-                // if (callback) { callback(cmd); }
-                // for (let x = 0; x < emulatedClients.length; x++){
-                //     if (cmd.uuid == emulatedClients[x].uuid){
-                //         emulatedClients[x].tunnel.close();
-                //     }
-                // }
-                // break;
+                if (callback) { callback(cmd); }
+                for (let x in emulatedClients){
+                    if (cmd.uuid == emulatedClients[x].uuid){
+                        emulatedClients[x].tunnel.close();
+                    }
+                }
+                break;
             }
             default: {
                 if (cmd.action) { console.log('Invalid server response, command: ' + cmd.action); }
                 if (callback) { callback(cmd); }
-                for (let x = 0; x < emulatedClients.length; x++){
+                for (let x in emulatedClients){
                     if (cmd.uuid == emulatedClients[x].uuid){
                         emulatedClients[x].tunnel.close();
                     }
