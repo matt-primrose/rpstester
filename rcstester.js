@@ -33,6 +33,8 @@ let passedTests;
 let numTestPatterns;
 let acmTests;
 let ccmTests;
+let expectedFailedTests;
+let expectedPassedTests;
 // Execute based on incoming arguments
 function run(argv) {
     let args = parseArguments(argv);
@@ -63,8 +65,11 @@ function startTest(){
     passedTests = 0;
     acmTests = 0;
     ccmTests = 0;
+    expectedFailedTests = 0;
+    expectedPassedTests = 0;
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
+    predictResults(testfile.messages, settings.num);
     let testPattern = 0;
     numTestPatterns = testfile.messages.length;
     for (let x = 0; x < settings.num; x++){
@@ -131,7 +136,7 @@ function connectToServer(message, callback){
             console.log('Invalid server response: ' + cmd); 
         }
         if (typeof cmd.errorText == 'string') { 
-            console.log('Server error: ' + cmd.errorText); 
+            //console.log('Server error: ' + cmd.errorText); 
             callback(cmd, true, false, null);
             if (emulatedClients[cmd.uuid]){
                 emulatedClients[cmd.uuid].tunnel.close();
@@ -198,13 +203,34 @@ function recordTestResults(testComplete, testPass, testType){
 }
 
 function processTestResults(requestedTests, completedTests, acmTests, ccmTests){
-    console.log('Test run complete!');
-    console.log('Test Configurations Run:   ' + numTestPatterns);
-    console.log('Tests requested:           ' + requestedTests);
-    console.log('Successful results:        ' + (acmTests + ccmTests));
-    console.log('Unsuccessful results:      ' + (completedTests - (acmTests + ccmTests)));
-    console.log('ACM tests ran:             ' + acmTests);
-    console.log('CCM tests ran:             ' + ccmTests);
+    let red = "\x1b[31m";
+    let white = "\x1b[37m";
+    let green = "\x1b[32m";
+    let result;
+    let successfulResults;
+    let unsuccessfulResults;
+    if (expectedPassedTests == (acmTests + ccmTests)) { successfulResults = green;} else { successfulResults = red;}
+    if (expectedFailedTests == (completedTests - (acmTests + ccmTests))) { unsuccessfulResults = green;} else { unsuccessfulResults = red;}
+    if ((successfulResults == green) && (unsuccessfulResults == green)) { result = green; } else { result = red; };
+    console.log(result,"Test run complete!");
+    console.log(white,'Test Configurations Run:   ' + numTestPatterns);
+    console.log(white,'Tests requested:           ' + requestedTests);
+    console.log(white,'Expected successful:       ' + expectedPassedTests);
+    console.log(successfulResults,'Successful results:        ' + (acmTests + ccmTests));
+    console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
+    console.log(unsuccessfulResults,'Unsuccessful results:      ' + (completedTests - (acmTests + ccmTests)));
+    console.log(white,'ACM tests ran:             ' + acmTests);
+    console.log(white,'CCM tests ran:             ' + ccmTests);
+}
+
+function predictResults(testMessages, iterations){
+    let y = 0;
+    for (let x = 0; x < iterations; x++){
+        if (y == testMessages.length) { y = 0; }
+        if (testMessages[y].expectedResult == 'pass') { expectedPassedTests++; }
+        if (testMessages[y].expectedResult == 'fail') { expectedFailedTests++; }
+        y++
+    }
 }
 
 // Figure out if any arguments were provided, otherwise show help
