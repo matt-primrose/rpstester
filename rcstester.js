@@ -43,6 +43,7 @@ function run(argv) {
     if ((args.url == undefined) || (args.num == undefined)){
         consoleHelp();
     }
+    if ((settings.num === 16992) || (settings.num === 16993)){ oamtct(); exit(0); }
     if ((typeof settings.url == 'string') && (typeof settings.num == 'number')){
         startTest();
     }
@@ -231,6 +232,12 @@ function predictResults(testMessages, iterations){
         if (testMessages[y].expectedResult == 'fail') { expectedFailedTests++; }
         y++
     }
+}
+
+function oamtct(){
+    console.log('Open AMT Cloud Toolkit - Remote Configuration Service Scale Testing Tool.');
+    console.log('Developed by Retail, Banking, Hospitality, and Education Transactional Team.');
+    console.log('Part of Intel(r) IOTG');
 }
 
 // Figure out if any arguments were provided, otherwise show help
