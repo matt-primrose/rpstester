@@ -43,7 +43,6 @@ function run(argv) {
     if ((args.url == undefined) || (args.num == undefined)){
         consoleHelp();
     }
-    if ((settings.num === 16992) || (settings.num === 16993)){ oamtct(); exit(0); }
     if ((typeof settings.url == 'string') && (typeof settings.num == 'number')){
         startTest();
     }
@@ -51,6 +50,7 @@ function run(argv) {
 function exit(status) { if (status == null) { status = 0; } try { process.exit(status); } catch (e) { } }
 function parseArguments(argv) {let r = {};for (let i in argv) {i = parseInt(i);if (argv[i].startsWith('--') == true) {let key = argv[i].substring(2).toLowerCase();let val = true;if (((i + 1) < argv.length) && (argv[i + 1].startsWith('--') == false)) {val = argv[i + 1];}r[key] = val;}}return r;}
 function consoleHelp(){
+    oamtct();
     console.log('RCS Scale Tester ver. ' + rcsTesterVersion);
     console.log('No action specified, use rcstester like this:\r\n');
     console.log('  rcstester --url [wss://server] --num [number]\r\n');
@@ -83,12 +83,12 @@ function startTest(){
     for (let x in emulatedClients){
         connectToServer(emulatedClients[x], function(resp, testComplete, testPass, testType){
             let guidCheck = false;
-            let verifyNonce = nonceCheck(resp.nonce, resp.signature);
+            //let verifyNonce = nonceCheck(resp.nonce, resp.signature);
             if (emulatedClients[x].uuid == resp.uuid) { guidCheck = true; }
-            testPass = (testPass && guidCheck && verifyNonce);
+            testPass = (testPass && guidCheck);
             recordTestResults(testComplete, testPass, testType);
             if (completedTests == requestedTests) {
-                processTestResults(requestedTests, completedTests, acmTests, ccmTests);
+                processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests);
             }
         });
     }
@@ -108,11 +108,6 @@ function generateTestClientInformation(testMessage, callback){
     message.nonce = generateFWNonce();
     message.uuid = generateUuid();
     callback(message.uuid, message);
-}
-
-function nonceCheck(nonce, signature){
-    // Need to verify signature, verify the fwNonce matches what was sent and verify the mcNonce matches what is in the signature.
-    return true;
 }
 
 function connectToServer(message, callback){
@@ -172,7 +167,7 @@ function connectToServer(message, callback){
                 if (cmd.action) { 
                     console.log('Unhandled server response, command: ' + cmd.action); 
                 }
-                if (callback) { callback(cmd); }
+                //if (callback) { callback(cmd); }
                 for (let x in emulatedClients){
                     if (cmd.uuid == emulatedClients[x].uuid){
                         emulatedClients[x].tunnel.close();
@@ -203,23 +198,23 @@ function recordTestResults(testComplete, testPass, testType){
     if (testType == 'ccm') { ccmTests++; }
 }
 
-function processTestResults(requestedTests, completedTests, acmTests, ccmTests){
+function processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests){
     let red = "\x1b[31m";
     let white = "\x1b[37m";
     let green = "\x1b[32m";
     let result;
     let successfulResults;
     let unsuccessfulResults;
-    if (expectedPassedTests == (acmTests + ccmTests)) { successfulResults = green;} else { successfulResults = red;}
-    if (expectedFailedTests == (completedTests - (acmTests + ccmTests))) { unsuccessfulResults = green;} else { unsuccessfulResults = red;}
+    if (expectedPassedTests == passedTests) { successfulResults = green;} else { successfulResults = red;}
+    if (expectedFailedTests == failedTests) { unsuccessfulResults = green;} else { unsuccessfulResults = red;}
     if ((successfulResults == green) && (unsuccessfulResults == green)) { result = green; } else { result = red; };
     console.log(result,"Test run complete!");
     console.log(white,'Test Configurations Run:   ' + numTestPatterns);
     console.log(white,'Tests requested:           ' + requestedTests);
     console.log(white,'Expected successful:       ' + expectedPassedTests);
-    console.log(successfulResults,'Successful results:        ' + (acmTests + ccmTests));
+    console.log(successfulResults,'Successful results:        ' + passedTests);
     console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
-    console.log(unsuccessfulResults,'Unsuccessful results:      ' + (completedTests - (acmTests + ccmTests)));
+    console.log(unsuccessfulResults,'Unsuccessful results:      ' + failedTests);
     console.log(white,'ACM tests ran:             ' + acmTests);
     console.log(white,'CCM tests ran:             ' + ccmTests);
 }
@@ -236,7 +231,7 @@ function predictResults(testMessages, iterations){
 
 function oamtct(){
     console.log('Open AMT Cloud Toolkit - Remote Configuration Service Scale Testing Tool.');
-    console.log('Developed by Retail, Banking, Hospitality, and Education Transactional Team.');
+    console.log('Developed by Retail, Banking, Hospitality, and Education (RBHE) Transactional Team.');
     console.log('Part of Intel(r) IOTG');
 }
 
