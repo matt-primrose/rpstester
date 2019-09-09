@@ -1,0 +1,25 @@
+{
+  "name": "rcstester",
+  "version": "1.0.0",
+  "description": "",
+  "main": "rcstester.js",
+  "dependencies": {
+    "ws": "^7.1.2",
+    "uuid": "^3.3.3",
+    "node-forge": "^0.8.5"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matt-primrose/rcstester.git"
+  },
+  "author": "Matt C. Primrose",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/matt-primrose/rcstester/issues"
+  },
+  "homepage": "https://github.com/matt-primrose/rcstester#readme"
+}
