@@ -97,6 +97,7 @@ function startTest(){
 function generateTestClientInformation(testMessage, callback){
     let message = new Object();
     message.client = testMessage.client;
+    message.version = testMessage.version;
     message.action = testMessage.action;
     message.profile = testMessage.profile;
     message.fqdn = testMessage.fqdn;
