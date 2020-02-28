@@ -127,6 +127,7 @@ function connectionManagerEx(client){
 
 function generateTestClientInformation(testMessage, index, callback){
     let message = new Object();
+<<<<<<< HEAD
     message.complete = false;
     message.index = index;
     message.jsonCmds = new Object();
@@ -160,6 +161,21 @@ function generateTestClientInformation(testMessage, index, callback){
     message.wsmanCmds.adminSetupResponse = new Object();
     message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
     callback(getUUID(message.jsonCmds.payload.uuid), message);
+=======
+    message.client = testMessage.client;
+    message.version = testMessage.version;
+    message.action = testMessage.action;
+    message.profile = testMessage.profile;
+    message.fqdn = testMessage.fqdn;
+    message.realm = testMessage.realm;
+    message.hashes = testMessage.hashes;
+    message.ver = testMessage.ver;
+    message.modes = testMessage.modes;
+    message.currentMode = testMessage.currentMode;
+    message.nonce = generateFWNonce();
+    message.uuid = generateUuid();
+    callback(message.uuid, message);
+>>>>>>> 4794b62a8dd5f2fe67134c6224aec8921d2c3426
 }
 
 function connectToServer(message, callback){
