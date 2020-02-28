@@ -35,6 +35,11 @@ let acmTests;
 let ccmTests;
 let expectedFailedTests;
 let expectedPassedTests;
+let maxWsConnections = 500;
+let curWsConnections = 0;
+let batchSize = 500;
+let connectionIndex = 1;
+let wsmanHeader;
 // Execute based on incoming arguments
 function run(argv) {
     let args = parseArguments(argv);
@@ -68,46 +73,93 @@ function startTest(){
     ccmTests = 0;
     expectedFailedTests = 0;
     expectedPassedTests = 0;
+
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
     predictResults(testfile.messages, settings.num);
+    wsmanHeader = testfile.wsmanTestMessages;
     let testPattern = 0;
     numTestPatterns = testfile.messages.length;
+    console.log('Generating Test Client Information...');
     for (let x = 0; x < settings.num; x++){
         if (testPattern == numTestPatterns){ testPattern = 0; }
-        generateTestClientInformation(testfile.messages[testPattern], function(uuid, message){
+        generateTestClientInformation(testfile.messages[testPattern], x, function(uuid, message){
             emulatedClients[uuid] = message;
         });
         testPattern++;
     }
+    console.log('Testing Data Generation Complete.  Starting tests...');
+    connectionManagerQueue();
+}
+
+function connectionManagerQueue(){
     for (let x in emulatedClients){
-        connectToServer(emulatedClients[x], function(resp, testComplete, testPass, testType){
-            let guidCheck = false;
-            //let verifyNonce = nonceCheck(resp.nonce, resp.signature);
-            if (emulatedClients[x].uuid == resp.uuid) { guidCheck = true; }
-            testPass = (testPass && guidCheck);
-            recordTestResults(testComplete, testPass, testType);
-            if (completedTests == requestedTests) {
-                processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests);
-            }
-        });
+        if (emulatedClients[x].index < (batchSize * connectionIndex)){
+            if (emulatedClients[x].complete == false){
+                connectionManagerEx(emulatedClients[x]);
+            } 
+        } else {
+            break;
+        }
+    }
+    connectionIndex++;
+}
+
+function connectionSlotAvailable(){
+    if (curWsConnections == 0){
+        return true;
+    } else {
+        return false;
     }
 }
 
-function generateTestClientInformation(testMessage, callback){
+function connectionManagerEx(client){
+    connectToServer(client, function(resp, testComplete, testPass, testType){
+        let guidCheck = false;
+        if (client.uuid == resp.uuid) { guidCheck = true; }
+        testPass = (testPass && guidCheck);
+        recordTestResults(testComplete, testPass, testType);
+        if (completedTests == requestedTests) {
+            processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests);
+        }
+    });
+}
+
+function generateTestClientInformation(testMessage, index, callback){
     let message = new Object();
-    message.client = testMessage.client;
-    message.action = testMessage.action;
-    message.profile = testMessage.profile;
-    message.fqdn = testMessage.fqdn;
-    message.realm = testMessage.realm;
-    message.hashes = testMessage.hashes;
-    message.ver = testMessage.ver;
-    message.modes = testMessage.modes;
-    message.currentMode = testMessage.currentMode;
-    message.nonce = generateFWNonce();
-    message.uuid = generateUuid();
-    callback(message.uuid, message);
+    message.complete = false;
+    message.index = index;
+    message.jsonCmds = new Object();
+    message.jsonCmds.apiKey = testMessage.jsonCmds.apiKey;
+    message.jsonCmds.appVersion = testMessage.jsonCmds.appVersion;
+    message.jsonCmds.expectedResult = testMessage.jsonCmds.expectedResult;
+    message.jsonCmds.message = testMessage.jsonCmds.message;
+    message.jsonCmds.method = testMessage.jsonCmds.method;
+    message.jsonCmds.protocolVersion = testMessage.jsonCmds.protocolVersion;
+    message.jsonCmds.status = testMessage.jsonCmds.status;
+    message.jsonCmds.payload = new Object();
+    message.jsonCmds.payload.build = testMessage.jsonCmds.payload.build;
+    message.jsonCmds.payload.certHashes = testMessage.jsonCmds.payload.certHashes;
+    message.jsonCmds.payload.client = testMessage.jsonCmds.payload.client;
+    message.jsonCmds.payload.currentMode = testMessage.jsonCmds.payload.currentMode;
+    message.jsonCmds.payload.fqdn = testMessage.jsonCmds.payload.fqdn;
+    message.jsonCmds.payload.password = generateOSAdminPassword();
+    message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
+    message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
+    message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
+    message.jsonCmds.payload.uuid = generateUuid();
+    message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
+    message.wsmanCmds = new Object();
+    message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
+    message.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes = testMessage.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes;
+    message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
+    message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateFWNonce(20);
+    message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
+    message.wsmanCmds.certInjectionResponse = new Object();
+    message.wsmanCmds.certInjectionResponse.returnValue = testMessage.wsmanCmds.certInjectionResponse.returnValue;
+    message.wsmanCmds.adminSetupResponse = new Object();
+    message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
+    callback(getUUID(message.jsonCmds.payload.uuid), message);
 }
 
 function connectToServer(message, callback){
@@ -115,63 +167,171 @@ function connectToServer(message, callback){
     let ws = new WebSocket(settings.url);
     ws.on('open', function(){
         for (let x in emulatedClients){
-            if (message.uuid == emulatedClients[x].uuid){
-                ws.send(JSON.stringify(message));
+            if (message.jsonCmds.payload.uuid == emulatedClients[x].jsonCmds.payload.uuid){
+                let ppcMessage = JSON.parse(JSON.stringify(message.jsonCmds));
+                console.log("---SENDING MESSAGE TO RPS---");
+                console.log(ppcMessage);
+                ppcMessage.payload = Buffer.from(JSON.stringify(ppcMessage.payload)).toString('base64');
+                ws.send(JSON.stringify(ppcMessage));
+                console.log("---MESSAGE SENT---");
                 emulatedClients[x].tunnel = ws;
+                emulatedClients[x].step = 0;
+                curWsConnections++;
+                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
             }
         }
     });
     ws.on('message', function(data){
+        console.log("---RECEIVED MESSAGE FROM RPS---");
         let cmd = null;
+        let payload = {};
+        let uuid = null;
         try {
             cmd = JSON.parse(data);
+            console.log("JSON Msg: \n\r" + JSON.stringify(cmd));
         } catch(ex){
             console.log('Unable to parse server response: ' + data);
         }
         if (typeof cmd != 'object') { 
             console.log('Invalid server response: ' + cmd); 
         }
-        if (typeof cmd.errorText == 'string') { 
-            //console.log('Server error: ' + cmd.errorText); 
-            callback(cmd, true, false, null);
-            if (emulatedClients[cmd.uuid]){
-                emulatedClients[cmd.uuid].tunnel.close();
-            }
+        if (cmd.status !== 'ok') { 
+            
         }
-        switch (cmd.action){
-            case 'acmactivate': {
-                if (callback) { callback(cmd); }
+        switch (cmd.method){
+            case 'wsman': {
+                let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
+                console.log("PAYLOAD Msg: \n\r" + pl);
+                console.log("---END OF MESSAGE---");
+                payload = pl.split("\n");
+                for (let x in payload){
+                    if (payload[x].substring(0,5) == "Host:"){
+                        uuid = payload[x].substring(6,42);
+                    }
+                
+                }
+                let wsmanMessage, header, combinedMessage, payloadB64, response;
                 for (let x in emulatedClients){
-                    if (cmd.uuid == emulatedClients[x].uuid){
-                        let response = {client:'meshcmd', version: 1, uuid: emulatedClients[x].uuid, action: 'acmactivate-success'};
-                        emulatedClients[x].tunnel.send(JSON.stringify(response));
-                        emulatedClients[x].tunnel.close();
-                        callback(cmd, true, true, 'acm');
+                    if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
+                        switch (emulatedClients[x].step){
+                            case 0: //General Settings with no Authentication WSMan message from RPS
+                                console.log("Step 0 - Start");
+                                emulatedClients[x].messageId = generateMessageId(0);
+                                emulatedClients[x].digestRealm = generateDigestRealm();
+                                emulatedClients[x].step++;
+                                wsmanMessage = createWsmanMessage(0);
+                                header = createHeader(wsmanHeader.header.status.unauthorized, wsmanHeader.header.digestAuth, wsmanHeader.header.contentType[0], wsmanHeader.header.server, wsmanMessage.length, wsmanHeader.header.connection, null, null);
+                                combinedMessage = header + wsmanMessage.wsman;
+                                console.log("---SENDING MESSAGE TO RPS---");
+                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                payloadB64 = Buffer.from(combinedMessage).toString('base64');
+                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payloadB64,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
+                                console.log("Message: \n\r" + JSON.stringify(response));
+                                emulatedClients[x].tunnel.send(JSON.stringify(response));
+                                console.log("---MESSAGE SENT---");
+                                console.log("Step 0 - End");
+                                break;
+                            case 1: //General Settings with Authentication WSMan message from RPS
+                                console.log("Step 1 - Start");
+                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
+                                emulatedClients[x].step++;
+                                wsmanMessage = createWsmanMessage(1, emulatedClients[x].messageId, emulatedClients[x].digestRealm);
+                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
+                                combinedMessage = header + wsmanMessage.wsman;
+                                console.log("---SENDING MESSAGE TO RPS---");
+                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                payload = Buffer.from(combinedMessage).toString('base64');
+                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
+                                console.log("Message: \n\r" + JSON.stringify(response));
+                                emulatedClients[x].tunnel.send(JSON.stringify(response));
+                                console.log("---MESSAGE SENT---");
+                                console.log("Step 1 - End");
+                                break;
+                            case 2: //Host Base Setup Service WSMan message from RPS
+                                console.log("Step 2 - Start");
+                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
+                                emulatedClients[x].step++;
+                                emulatedClients[x].fwNonce = generateFWNonce(20);
+                                wsmanMessage = createWsmanMessage(2, emulatedClients[x].messageId, null, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, emulatedClients[x].fwNonce, null);
+                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
+                                combinedMessage = header + wsmanMessage.wsman;
+                                console.log("---SENDING MESSAGE TO RPS---");
+                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                payload = Buffer.from(combinedMessage).toString('base64');
+                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
+                                console.log("Message: \n\r" + JSON.stringify(response));
+                                emulatedClients[x].tunnel.send(JSON.stringify(response));
+                                console.log("---MESSAGE SENT---");
+                                console.log("Step 2 - End");
+                                break;
+                            case 3: //Certificate Injection WSMan message from RPS
+                                console.log("Step 3 - Start");
+                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
+                                emulatedClients[x].step++;
+                                wsmanMessage = createWsmanMessage(3, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.certInjectionResponse.returnValue);
+                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
+                                combinedMessage = header + wsmanMessage.wsman;
+                                console.log("---SENDING MESSAGE TO RPS---");
+                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                payload = Buffer.from(combinedMessage).toString('base64');
+                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
+                                console.log("Message: \n\r" + JSON.stringify(response));
+                                emulatedClients[x].tunnel.send(JSON.stringify(response));
+                                console.log("---MESSAGE SENT---");
+                                console.log("Step 3 - End");
+                                break;
+                            case 4: //Admin Control Setup WSMan message from RPS
+                                console.log("Step 4 - Start");
+                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
+                                emulatedClients[x].step++;
+                                wsmanMessage = createWsmanMessage(4, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.adminSetupResponse.returnValue);
+                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
+                                combinedMessage = header + wsmanMessage.wsman;
+                                console.log("---SENDING MESSAGE TO RPS---");
+                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                payload = Buffer.from(combinedMessage).toString('base64');
+                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
+                                console.log("Message: \n\r" + JSON.stringify(response));
+                                emulatedClients[x].tunnel.send(JSON.stringify(response));
+                                console.log("---MESSAGE SENT---");
+                                console.log("Step 4 - Start");
+                                break;
+                            default:
+                                break;
+                        }
                     }
                 }
                 break;
             }
-            case 'ccmactivate': {
-                if (callback) { callback(cmd); }
+            case 'success': {
+                if(callback) { callback(cmd); }
                 for (let x in emulatedClients){
-                    if (cmd.uuid == emulatedClients[x].uuid){
-                        let response = {client:'meshcmd', version: 1, uuid: emulatedClients[x].uuid, action: 'ccmactivate-success'};
-                        emulatedClients[x].tunnel.send(JSON.stringify(response));
+                    if (cmd.message.substring(7,43) == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
+                        console.log('Closing Connection');
+                        emulatedClients[x].complete = true;
                         emulatedClients[x].tunnel.close();
-                        callback(cmd, true, true, 'ccm');
+                        curWsConnections--;
+                        if (connectionSlotAvailable()){
+                            console.log('running CMQ');
+                            connectionManagerQueue();
+                        }
+                        console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
+                        callback(cmd, true, true, null);
                     }
                 }
+                break;
+            }
+            case 'error': {
+                console.log("Error Message: " + cmd.message);
+                if (emulatedClients[uuid]){
+                    emulatedClients[uuid].tunnel.close();
+                }
+                callback(cmd, true, false, null);
                 break;
             }
             default: {
-                if (cmd.action) { 
-                    console.log('Unhandled server response, command: ' + cmd.action); 
-                }
-                //if (callback) { callback(cmd); }
-                for (let x in emulatedClients){
-                    if (cmd.uuid == emulatedClients[x].uuid){
-                        emulatedClients[x].tunnel.close();
-                    }
+                if (cmd.method) { 
+                    console.log('Unhandled server response, command: ' + data); 
                 }
                 break;
             }
@@ -182,12 +342,135 @@ function connectToServer(message, callback){
     });
 }
 
-function generateFWNonce(){
-    return crypto.randomBytes(20); 
+function createWsmanMessage(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
+    let message = {}
+    switch (messageType){
+        case 0:
+            let unauthorized = '<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" >\n<html><head><link rel=stylesheet href=/styles.css>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n<title>Intel&reg; Active Management Technology</title></head>\n<body>\n<table class=header>\n<tr><td valign=top nowrap>\n<p class=top1>Intel<font class=r><sup>&reg;</sup></font> Active Management Technology\n<td valign=\"top\"><img src=\"logo.gif\" align=\"right\" alt=\"Intel\">\n</table>\n<br />\n<h2 class=warn>Log on failed. Incorrect user name or password, or user account temporarily locked.</h2>\n\n<p>\n<form METHOD=\"GET\" action=\"index.htm\"><h2><input type=submit value=\"Try again\">\n</h2></form>\n<p>\n\n</body>\n</html>\n';
+            message.wsman = unauthorized;
+            message.length = unauthorized.length;            
+            break;
+        case 1:
+            //let generalSettingsResponse = '0513\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?><a:Envelope xmlns:a=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:b=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:c=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/02/trust\" xmlns:e=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:f=\"http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd\" xmlns:g=\"http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>1</b:RelatesTo><b:Action a:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings</c:ResourceURI></a:Header><a:Body><g:AMT_GeneralSettings><g:AMTNetworkEnabled>1</g:AMTNetworkEnabled><g:DDNSPeriodicUpdateInterval>1440</g:DDNSPeriodicUpdateInterval><g:DDNSTTL>900</g:DDNSTTL><g:DDNSUpdateByDHCPServerEnabled>true</g:DDNSUpdateByDHCPServerEnabled><g:DDNSUpdateEnabled>false</g:DDNSUpdateEnabled><g:DHCPv6ConfigurationTimeout>0</g:DHCPv6ConfigurationTimeout><g:DigestRea\r\n030B\r\nlm>'+digestRealm+'</g:DigestRealm><g:DomainName></g:DomainName><g:ElementName>Intel(r) AMT: General Settings</g:ElementName><g:HostName></g:HostName><g:HostOSFQDN></g:HostOSFQDN><g:IdleWakeTimeout>65535</g:IdleWakeTimeout><g:InstanceID>Intel(r) AMT: General Settings</g:InstanceID><g:NetworkInterfaceEnabled>true</g:NetworkInterfaceEnabled><g:PingResponseEnabled>true</g:PingResponseEnabled><g:PowerSource>0</g:PowerSource><g:PreferredAddressFamily>0</g:PreferredAddressFamily><g:PresenceNotificationInterval>0</g:PresenceNotificationInterval><g:PrivacyLevel>0</g:PrivacyLevel><g:RmcpPingResponseEnabled>true</g:RmcpPingResponseEnabled><g:SharedFQDN>true</g:SharedFQDN><g:WsmanOnlyMode>false</g:WsmanOnlyMode></g:AMT_GeneralSettings></a:Body></a:Envelope>\r\n0\r\n\r\n';
+            let generalSettingsResponse = '0513\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?><a:Envelope xmlns:a=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:b=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:c=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/02/trust\" xmlns:e=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:f=\"http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd\" xmlns:g=\"http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>1</b:RelatesTo><b:Action a:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings</c:ResourceURI></a:Header><a:Body><g:AMT_GeneralSettings><g:AMTNetworkEnabled>1</g:AMTNetworkEnabled><g:DDNSPeriodicUpdateInterval>1440</g:DDNSPeriodicUpdateInterval><g:DDNSTTL>900</g:DDNSTTL><g:DDNSUpdateByDHCPServerEnabled>true</g:DDNSUpdateByDHCPServerEnabled><g:DDNSUpdateEnabled>false</g:DDNSUpdateEnabled><g:DHCPv6ConfigurationTimeout>0</g:DHCPv6ConfigurationTimeout><g:DigestRealm>'+digestRealm+'</g:DigestRealm><g:DomainName></g:DomainName><g:ElementName>Intel(r) AMT: General Settings</g:ElementName><g:HostName></g:HostName><g:HostOSFQDN></g:HostOSFQDN><g:IdleWakeTimeout>65535</g:IdleWakeTimeout><g:InstanceID>Intel(r) AMT: General Settings</g:InstanceID><g:NetworkInterfaceEnabled>true</g:NetworkInterfaceEnabled><g:PingResponseEnabled>true</g:PingResponseEnabled><g:PowerSource>0</g:PowerSource><g:PreferredAddressFamily>0</g:PreferredAddressFamily><g:PresenceNotificationInterval>0</g:PresenceNotificationInterval><g:PrivacyLevel>0</g:PrivacyLevel><g:RmcpPingResponseEnabled>true</g:RmcpPingResponseEnabled><g:SharedFQDN>true</g:SharedFQDN><g:WsmanOnlyMode>false</g:WsmanOnlyMode></g:AMT_GeneralSettings></a:Body></a:Envelope>\r\n0\r\n\r\n';
+            message.wsman = generalSettingsResponse;
+            message.length = generalSettingsResponse.length;
+            break;
+        case 2:
+            //let hostBasedSetupServiceResponse = '0513\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?><a:Envelope xmlns:a=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:b=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:c=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/02/trust\" xmlns:e=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:f=\"http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd\" xmlns:g=\"http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService\" xmlns:h=\"http://schemas.dmtf.org/wbem/wscim/1/common\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>2</b:RelatesTo><b:Action a:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:IPS_HostBasedSetupService><g:AllowedControlModes>'+allowedControlModes[0]+'</g:AllowedControlModes><g:AllowedControlModes>'+allowedControlModes[1]+'</g:AllowedControlModes><g:CertChainStatus>'+certChainStatus+'</g:CertChainStatus><g:ConfigurationNonce>'+configurationNonce+'</g:ConfigurationNonce><g:CreationClassName>IPS_HostBasedSetupService<\r\n0163\r\n/g:CreationClassName><g:CurrentControlMode>'+currentControlMode+'</g:CurrentControlMode><g:ElementName>Intel(r) AMT Host Based Setup Service</g:ElementName><g:Name>Intel(r) AMT Host Based Setup Service</g:Name><g:SystemCreationClassName>CIM_ComputerSystem</g:SystemCreationClassName><g:SystemName>Intel(r) AMT</g:SystemName></g:IPS_HostBasedSetupService></a:Body></a:Envelope>\r\n0\r\n\r\n';
+            let hostBasedSetupServiceResponse = '0513\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?><a:Envelope xmlns:a=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:b=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:c=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/02/trust\" xmlns:e=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:f=\"http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd\" xmlns:g=\"http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService\" xmlns:h=\"http://schemas.dmtf.org/wbem/wscim/1/common\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>2</b:RelatesTo><b:Action a:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:IPS_HostBasedSetupService><g:AllowedControlModes>'+allowedControlModes[0]+'</g:AllowedControlModes><g:AllowedControlModes>'+allowedControlModes[1]+'</g:AllowedControlModes><g:CertChainStatus>'+certChainStatus+'</g:CertChainStatus><g:ConfigurationNonce>'+configurationNonce+'</g:ConfigurationNonce><g:CreationClassName>IPS_HostBasedSetupService</g:CreationClassName><g:CurrentControlMode>'+currentControlMode+'</g:CurrentControlMode><g:ElementName>Intel(r) AMT Host Based Setup Service</g:ElementName><g:Name>Intel(r) AMT Host Based Setup Service</g:Name><g:SystemCreationClassName>CIM_ComputerSystem</g:SystemCreationClassName><g:SystemName>Intel(r) AMT</g:SystemName></g:IPS_HostBasedSetupService></a:Body></a:Envelope>\r\n0\r\n\r\n';
+            message.wsman = hostBasedSetupServiceResponse;
+            message.length = hostBasedSetupServiceResponse.length;
+            break;
+        case 3:
+            let certinjectionResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>3</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChainResponse</b:Action><b:MessageID>uuid:00000000-8086-8086-8086-000000000066</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AddNextCertInChain_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AddNextCertInChain_OUTPUT></a:Body></a:Envelope>';
+            message.wsman = certinjectionResponse;
+            message.length = certinjectionResponse.length;
+            break;
+        case 4:
+            let adminSetupResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>7</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetupResponse</b:Action><b:MessageID>uuid:00000000-8086-8086-8086-00000000006A</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AdminSetup_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AdminSetup_OUTPUT></a:Body></a:Envelope>';
+            message.wsman = adminSetupResponse;
+            message.length = adminSetupResponse.length;
+            break;
+        default:
+            break;
+    }
+    return message;
+}
+
+function createHeader(status, auth, contentType, server, contentLength, connection, xFrame, encoding){
+    let header = null;
+    if (status !== null) { header = status + "\r\n";}
+    if (auth !== null) { header  += auth.auth + 'Digest realm="' + generateDigestRealm() + '", ' + auth.nonce + '"' + generateFWNonce(16) + '", ' + auth.stale + '"false", ' + auth.qop + '"auth"\r\n'; }
+    if (contentType !== null) { header  += 'Content-Type: ' +contentType + '\r\n'; }
+    if (server !== null) { header  += 'Server: ' + server + '\r\n'; }
+    if (contentLength !== null) { header  += 'Content-Length: ' + contentLength + '\r\n'; }
+    if (connection !== null) { header  += 'Connection: ' + connection + '\r\n\r\n'; }
+    if (xFrame !== null) { header  += 'X-Frame-Options: ' + xFrame + '\r\n'; }
+    if (encoding !== null) { header  += 'Transfer-Encoding: ' + encoding + '\r\n\r\n'; }
+    return header;
+}
+
+function generateFWNonce(length){
+    let nonce = crypto.randomBytes(length).toString('hex'); 
+    return nonce;
+    
 }
 
 function generateUuid(){
-    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.randomFillSync(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+    const uuidv4 = require('uuid').v4;
+    let buf = new Array();
+    let amtUuid = uuidv4(null, buf);
+    //console.log(amtUuid);
+    //console.log(getUUID(amtUuid));
+    //let uuid = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.randomFillSync(new Uint8Array(1))[0] & 15 >> c / 4));
+    return amtUuid;
+}
+
+function getUUID(uuid) {
+    uuid = Buffer.from(uuid);
+    let guid = [
+      zeroLeftPad(uuid.readUInt32LE(0).toString(16), 8),
+      zeroLeftPad(uuid.readUInt16LE(4).toString(16), 4),
+      zeroLeftPad(uuid.readUInt16LE(6).toString(16), 4),
+      zeroLeftPad(uuid.readUInt16BE(8).toString(16), 4),
+      zeroLeftPad(uuid.slice(10).toString("hex").toLowerCase(), 12)].join("-");
+
+    return guid;
+  }
+
+  function zeroLeftPad(str, len) {
+    if (len == null && typeof len != "number") {
+      return null;
+    }
+    if (str == null) str = ""; // If null, this is to generate zero leftpad string
+    let zlp = "";
+    for (var i = 0; i < len - str.length; i++) {
+      zlp += "0";
+    }
+    return zlp + str;
+  }
+
+function generateMessageId(previousMessageId){
+    return previousMessageId++;
+}
+
+function generateDigestRealm(){
+    let digestRealm = null;
+    digestRealm = 'Digest:'+getRandomHex(4)+'0000000000000000000000000000';
+    return digestRealm;
+}
+function getRandomHex(length){
+    let num;
+    for (var x = 0; x < length; x++){
+        if (x === 0) { num = Math.floor(Math.random() * 15).toString(16); }
+        else { num += Math.floor(Math.random() * 15).toString(16); }
+    }
+    return num;
+}
+
+function generateOSAdminPassword(){
+    let length = 32;
+    let password = '';
+    let validChars = "abcdefghijklmnopqrstuvwxyz";
+    let validNums = "0123456789";
+    let validSpec = "!@#$%^&*()_-+=?.>,<";
+    let numLen = Math.floor(Math.random() * length/3) + 1;
+    let specLen = Math.floor(Math.random() * length/3) + 1;
+    let charLen = length-numLen-specLen;
+    for (let x = 0; x < charLen; x++){
+        let upper = Math.random() >= 0.5;
+        if (upper == true){ password += validChars.charAt(Math.floor(Math.random() * validChars.length)).toUpperCase(); }
+        else { password += validChars.charAt(Math.floor(Math.random() * validChars.length)); }
+    }
+    for (let x = 0; x < specLen; x++){
+        password += validSpec.charAt(Math.floor(Math.random() * validSpec.length));
+    }
+    for (let x = 0; x < numLen; x++){
+        password += validNums.charAt(Math.floor(Math.random() * validNums.length));
+        password = password.split('').sort(function(){ return 0.5 - Math.random() }).join('');
+    }
+    return password;
 }
 
 function recordTestResults(testComplete, testPass, testType){
@@ -223,16 +506,14 @@ function predictResults(testMessages, iterations){
     let y = 0;
     for (let x = 0; x < iterations; x++){
         if (y == testMessages.length) { y = 0; }
-        if (testMessages[y].expectedResult == 'pass') { expectedPassedTests++; }
-        if (testMessages[y].expectedResult == 'fail') { expectedFailedTests++; }
+        if (testMessages[y].jsonCmds.expectedResult == 'pass') { expectedPassedTests++; }
+        if (testMessages[y].jsonCmds.expectedResult == 'fail') { expectedFailedTests++; }
         y++
     }
 }
 
 function oamtct(){
-    console.log('Open AMT Cloud Toolkit - Remote Configuration Service Scale Testing Tool.');
-    console.log('Developed by Retail, Banking, Hospitality, and Education (RBHE) Transactional Team.');
-    console.log('Part of Intel(r) IOTG');
+    console.log('Open AMT Cloud Toolkit - Remote Provisioning Software Scale Testing Tool.');
 }
 
 // Figure out if any arguments were provided, otherwise show help
