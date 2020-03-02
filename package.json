@@ -10,7 +10,8 @@
   },
   "devDependencies": {},
   "scripts": {
-    "test": "test"
+    "test": "test",
+    "start": "node rcstester.js"
   },
   "repository": {
     "type": "git",

@@ -31,6 +31,7 @@ let requestedTests;
 let failedTests;
 let passedTests;
 let numTestPatterns;
+let failedTestCaseNames;
 let acmTests;
 let ccmTests;
 let expectedFailedTests;
@@ -40,11 +41,13 @@ let curWsConnections = 0;
 let batchSize = 500;
 let connectionIndex = 1;
 let wsmanHeader;
+
 // Execute based on incoming arguments
 function run(argv) {
     let args = parseArguments(argv);
-    if ((typeof args.url) == 'string') { settings.url = args.url ;}
+    if ((typeof args.url) == 'string') { settings.url = args.url; }
     if ((typeof args.num) == 'string') { settings.num = parseInt(args.num); }
+    if ((typeof args.verbose) == 'string') { settings.verbose = (args.verbose.toLowerCase() == "true"); }
     if ((args.url == undefined) || (args.num == undefined)){
         consoleHelp();
     }
@@ -61,6 +64,7 @@ function consoleHelp(){
     console.log('  rcstester --url [wss://server] --num [number]\r\n');
     console.log('  URL      - Server fqdn or IP:port of the RCS.');
     console.log('  NUM      - Number of connections to emulate.');
+    console.log('  VERBOSE  - Verbose logging to console.');
     exit(1); return;
 }
 
@@ -68,6 +72,7 @@ function startTest(){
     emulatedClients = new Object();
     completedTests = 0;
     failedTests = 0;
+    failedTestCaseNames = new Array();
     passedTests = 0;
     acmTests = 0;
     ccmTests = 0;
@@ -76,14 +81,14 @@ function startTest(){
 
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
-    predictResults(testfile.messages, settings.num);
+    predictResults(testfile.testCases, settings.num);
     wsmanHeader = testfile.wsmanTestMessages;
     let testPattern = 0;
-    numTestPatterns = testfile.messages.length;
+    numTestPatterns = (settings.num > testfile.testCases.length ? testfile.testCases.length : settings.num);
     console.log('Generating Test Client Information...');
     for (let x = 0; x < settings.num; x++){
         if (testPattern == numTestPatterns){ testPattern = 0; }
-        generateTestClientInformation(testfile.messages[testPattern], x, function(uuid, message){
+        generateTestClientInformation(testfile.testCases[testPattern], x, function(uuid, message){
             emulatedClients[uuid] = message;
         });
         testPattern++;
@@ -114,11 +119,11 @@ function connectionSlotAvailable(){
 }
 
 function connectionManagerEx(client){
-    connectToServer(client, function(resp, testComplete, testPass, testType){
+    connectToServer(client, function(resp, testComplete, testPass, testType, testCaseName){
         let guidCheck = false;
         if (client.uuid == resp.uuid) { guidCheck = true; }
         testPass = (testPass && guidCheck);
-        recordTestResults(testComplete, testPass, testType);
+        recordTestResults(testComplete, testPass, testType, testCaseName, client.expectedResult);
         if (completedTests == requestedTests) {
             processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests);
         }
@@ -129,10 +134,12 @@ function generateTestClientInformation(testMessage, index, callback){
     let message = new Object();
     message.complete = false;
     message.index = index;
+    message.testCaseName = testMessage.testCaseName;
+    message.testCaseDescription = testMessage.testCaseDescription;
+    message.expectedResult = testMessage.expectedResult;
     message.jsonCmds = new Object();
     message.jsonCmds.apiKey = testMessage.jsonCmds.apiKey;
     message.jsonCmds.appVersion = testMessage.jsonCmds.appVersion;
-    message.jsonCmds.expectedResult = testMessage.jsonCmds.expectedResult;
     message.jsonCmds.message = testMessage.jsonCmds.message;
     message.jsonCmds.method = testMessage.jsonCmds.method;
     message.jsonCmds.protocolVersion = testMessage.jsonCmds.protocolVersion;
@@ -169,11 +176,11 @@ function connectToServer(message, callback){
         for (let x in emulatedClients){
             if (message.jsonCmds.payload.uuid == emulatedClients[x].jsonCmds.payload.uuid){
                 let ppcMessage = JSON.parse(JSON.stringify(message.jsonCmds));
-                console.log("---SENDING MESSAGE TO RPS---");
-                console.log(ppcMessage);
+                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                if (settings.verbose) { console.log(ppcMessage); }
                 ppcMessage.payload = Buffer.from(JSON.stringify(ppcMessage.payload)).toString('base64');
                 ws.send(JSON.stringify(ppcMessage));
-                console.log("---MESSAGE SENT---");
+                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
                 emulatedClients[x].tunnel = ws;
                 emulatedClients[x].step = 0;
                 curWsConnections++;
@@ -182,18 +189,18 @@ function connectToServer(message, callback){
         }
     });
     ws.on('message', function(data){
-        console.log("---RECEIVED MESSAGE FROM RPS---");
+        if (settings.verbose) { console.log("---RECEIVED MESSAGE FROM RPS---"); }
         let cmd = null;
         let payload = {};
         let uuid = null;
         try {
             cmd = JSON.parse(data);
-            console.log("JSON Msg: \n\r" + JSON.stringify(cmd));
+            if (settings.verbose) { console.log("JSON Msg: \n\r" + JSON.stringify(cmd)); }
         } catch(ex){
-            console.log('Unable to parse server response: ' + data);
+            if (settings.verbose) { console.log('Unable to parse server response: ' + data); }
         }
         if (typeof cmd != 'object') { 
-            console.log('Invalid server response: ' + cmd); 
+            if (settings.verbose) { console.log('Invalid server response: ' + cmd); }
         }
         if (cmd.status !== 'ok') { 
             
@@ -201,8 +208,8 @@ function connectToServer(message, callback){
         switch (cmd.method){
             case 'wsman': {
                 let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
-                console.log("PAYLOAD Msg: \n\r" + pl);
-                console.log("---END OF MESSAGE---");
+                if (settings.verbose) { console.log("PAYLOAD Msg: \n\r" + pl); }
+                if (settings.verbose) { console.log("---END OF MESSAGE---"); }
                 payload = pl.split("\n");
                 for (let x in payload){
                     if (payload[x].substring(0,5) == "Host:"){
@@ -215,86 +222,86 @@ function connectToServer(message, callback){
                     if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
                         switch (emulatedClients[x].step){
                             case 0: //General Settings with no Authentication WSMan message from RPS
-                                console.log("Step 0 - Start");
+                            if (settings.verbose) { console.log("Step 0 - Start"); }
                                 emulatedClients[x].messageId = generateMessageId(0);
                                 emulatedClients[x].digestRealm = generateDigestRealm();
                                 emulatedClients[x].step++;
                                 wsmanMessage = createWsmanMessage(0);
                                 header = createHeader(wsmanHeader.header.status.unauthorized, wsmanHeader.header.digestAuth, wsmanHeader.header.contentType[0], wsmanHeader.header.server, wsmanMessage.length, wsmanHeader.header.connection, null, null);
                                 combinedMessage = header + wsmanMessage.wsman;
-                                console.log("---SENDING MESSAGE TO RPS---");
-                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
                                 payloadB64 = Buffer.from(combinedMessage).toString('base64');
                                 response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payloadB64,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                console.log("Message: \n\r" + JSON.stringify(response));
+                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
                                 emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                console.log("---MESSAGE SENT---");
-                                console.log("Step 0 - End");
+                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                                if (settings.verbose) { console.log("Step 0 - End"); }
                                 break;
                             case 1: //General Settings with Authentication WSMan message from RPS
-                                console.log("Step 1 - Start");
+                                if (settings.verbose) { console.log("Step 1 - Start"); }
                                 emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
                                 emulatedClients[x].step++;
                                 wsmanMessage = createWsmanMessage(1, emulatedClients[x].messageId, emulatedClients[x].digestRealm);
                                 header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
                                 combinedMessage = header + wsmanMessage.wsman;
-                                console.log("---SENDING MESSAGE TO RPS---");
-                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
                                 payload = Buffer.from(combinedMessage).toString('base64');
                                 response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                console.log("Message: \n\r" + JSON.stringify(response));
+                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
                                 emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                console.log("---MESSAGE SENT---");
-                                console.log("Step 1 - End");
+                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                                if (settings.verbose) { console.log("Step 1 - End"); }
                                 break;
                             case 2: //Host Base Setup Service WSMan message from RPS
-                                console.log("Step 2 - Start");
+                                if (settings.verbose) { console.log("Step 2 - Start"); }
                                 emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
                                 emulatedClients[x].step++;
                                 emulatedClients[x].fwNonce = generateFWNonce(20);
                                 wsmanMessage = createWsmanMessage(2, emulatedClients[x].messageId, null, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, emulatedClients[x].fwNonce, null);
                                 header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
                                 combinedMessage = header + wsmanMessage.wsman;
-                                console.log("---SENDING MESSAGE TO RPS---");
-                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
                                 payload = Buffer.from(combinedMessage).toString('base64');
                                 response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                console.log("Message: \n\r" + JSON.stringify(response));
+                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
                                 emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                console.log("---MESSAGE SENT---");
-                                console.log("Step 2 - End");
+                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                                if (settings.verbose) { console.log("Step 2 - End"); }
                                 break;
                             case 3: //Certificate Injection WSMan message from RPS
-                                console.log("Step 3 - Start");
+                                if (settings.verbose) { console.log("Step 3 - Start"); }
                                 emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
                                 emulatedClients[x].step++;
                                 wsmanMessage = createWsmanMessage(3, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.certInjectionResponse.returnValue);
                                 header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
                                 combinedMessage = header + wsmanMessage.wsman;
-                                console.log("---SENDING MESSAGE TO RPS---");
-                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
                                 payload = Buffer.from(combinedMessage).toString('base64');
                                 response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                console.log("Message: \n\r" + JSON.stringify(response));
+                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
                                 emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                console.log("---MESSAGE SENT---");
-                                console.log("Step 3 - End");
+                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                                if (settings.verbose) { console.log("Step 3 - End"); }
                                 break;
                             case 4: //Admin Control Setup WSMan message from RPS
-                                console.log("Step 4 - Start");
+                                if (settings.verbose) { console.log("Step 4 - Start"); }
                                 emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
                                 emulatedClients[x].step++;
                                 wsmanMessage = createWsmanMessage(4, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.adminSetupResponse.returnValue);
                                 header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
                                 combinedMessage = header + wsmanMessage.wsman;
-                                console.log("---SENDING MESSAGE TO RPS---");
-                                console.log("WSMan Payload: \n\r" + combinedMessage);
+                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
                                 payload = Buffer.from(combinedMessage).toString('base64');
                                 response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                console.log("Message: \n\r" + JSON.stringify(response));
+                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
                                 emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                console.log("---MESSAGE SENT---");
-                                console.log("Step 4 - Start");
+                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                                if (settings.verbose) { console.log("Step 4 - Start"); }
                                 break;
                             default:
                                 break;
@@ -304,41 +311,43 @@ function connectToServer(message, callback){
                 break;
             }
             case 'success': {
-                if(callback) { callback(cmd); }
-                for (let x in emulatedClients){
-                    if (cmd.message.substring(7,43) == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
-                        console.log('Closing Connection');
-                        emulatedClients[x].complete = true;
-                        emulatedClients[x].tunnel.close();
-                        curWsConnections--;
-                        if (connectionSlotAvailable()){
-                            console.log('running CMQ');
-                            connectionManagerQueue();
-                        }
-                        console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
-                        callback(cmd, true, true, null);
-                    }
+                //if(callback) { callback(cmd); }
+                emulatedClients[cmd.message.substring(7,43)].complete = true;
+                emulatedClients[cmd.message.substring(7,43)].tunnel.close();
+                let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
+                curWsConnections--;
+                if (connectionSlotAvailable()){
+                    //console.log('running CMQ');
+                    connectionManagerQueue();
                 }
+                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
+                callback(cmd, true, true, null, testCaseName);
                 break;
             }
             case 'error': {
-                console.log("Error Message: " + cmd.message);
-                if (emulatedClients[uuid]){
-                    emulatedClients[uuid].tunnel.close();
+                //if(callback) { callback(cmd); }
+                emulatedClients[cmd.message.substring(7,43)].complete = true;
+                emulatedClients[cmd.message.substring(7,43)].tunnel.close();
+                let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
+                curWsConnections--;
+                if (connectionSlotAvailable()){
+                    //console.log('running CMQ');
+                    connectionManagerQueue();
                 }
-                callback(cmd, true, false, null);
+                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
+                callback(cmd, true, false, null, testCaseName);
                 break;
             }
             default: {
                 if (cmd.method) { 
-                    console.log('Unhandled server response, command: ' + data); 
+                    if (settings.verbose) { console.log('Unhandled server response, command: ' + data); }
                 }
                 break;
             }
         }
     });
     ws.on('error', function(err){
-        console.log('Server error received: ' + err);
+        if (settings.verbose) { console.log('Server error received: ' + err); }
     });
 }
 
@@ -473,10 +482,12 @@ function generateOSAdminPassword(){
     return password;
 }
 
-function recordTestResults(testComplete, testPass, testType){
+function recordTestResults(testComplete, testPass, testType, testCaseName, expectedResult){
+    let expectedResultBool = (expectedResult == "pass" ? true : false);
     if (testComplete == true) { completedTests++ ;}
     if (testPass == true) { passedTests++; }
     if (testPass == false) { failedTests++; }
+    if (testCaseName !== null && testPass !== expectedResultBool) { failedTestCaseNames.push(testCaseName); }
     if (testType == 'acm') { acmTests++; }
     if (testType == 'ccm') { ccmTests++; }
 }
@@ -498,6 +509,7 @@ function processTestResults(requestedTests, acmTests, ccmTests, passedTests, fai
     console.log(successfulResults,'Successful results:        ' + passedTests);
     console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
     console.log(unsuccessfulResults,'Unsuccessful results:      ' + failedTests);
+    console.log(white,'Failing Test Cases:             ' + failedTestCaseNames.toString());
     console.log(white,'ACM tests ran:             ' + acmTests);
     console.log(white,'CCM tests ran:             ' + ccmTests);
 }
@@ -506,8 +518,8 @@ function predictResults(testMessages, iterations){
     let y = 0;
     for (let x = 0; x < iterations; x++){
         if (y == testMessages.length) { y = 0; }
-        if (testMessages[y].jsonCmds.expectedResult == 'pass') { expectedPassedTests++; }
-        if (testMessages[y].jsonCmds.expectedResult == 'fail') { expectedFailedTests++; }
+        if (testMessages[y].expectedResult == 'pass') { expectedPassedTests++; }
+        if (testMessages[y].expectedResult == 'fail') { expectedFailedTests++; }
         y++
     }
 }
