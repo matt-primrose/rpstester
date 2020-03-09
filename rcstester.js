@@ -23,6 +23,7 @@ limitations under the License.
 'use strict';
 const fs = require('fs');
 const crypto = require('crypto');
+const parseWsman = require('./amt-xml').ParseWsman;
 const rcsTesterVersion = '0.0.1';
 const settings = new Object();
 let emulatedClients;
@@ -193,6 +194,8 @@ function connectToServer(message, callback){
         let cmd = null;
         let payload = {};
         let uuid = null;
+        let wsman = null;
+        let authHeader = false;
         try {
             cmd = JSON.parse(data);
             if (settings.verbose) { console.log("JSON Msg: \n\r" + JSON.stringify(cmd)); }
@@ -207,16 +210,31 @@ function connectToServer(message, callback){
         }
         switch (cmd.method){
             case 'wsman': {
+                // Decode payload from JSON message
                 let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
-                if (settings.verbose) { console.log("PAYLOAD Msg: \n\r" + pl); }
+                if (settings.verbose) { console.log("PAYLOAD Msg: \n\r" + JSON.stringify(pl)); }
                 if (settings.verbose) { console.log("---END OF MESSAGE---"); }
-                payload = pl.split("\n");
+                //console.log(pl);
+                // Split payload up so we can extract important pieces
+                payload = pl.split("\r\n");
+                //console.log(payload);
+                // Set flag for getting WSMAN
+                let xml = false;
+                // Create WSMAN temporary holder
+                let xmlHolder = new Array();
+                //Parse through Payload and extract important pieces
                 for (let x in payload){
-                    if (payload[x].substring(0,5) == "Host:"){
-                        uuid = payload[x].substring(6,42);
-                    }
-                
+                    // Check for Authentication Header
+                    if (payload[x].substring(0,14) == "Authorization:"){ authHeader = true; }
+                    // Grab the UUID for this message
+                    if (payload[x].substring(0,5) == "Host:"){ uuid = payload[x].substring(6,42); }
+                    // Find where WSMAN message begins and extract message parts
+                    if (payload[x].substring(0,5) == "<?xml"){ xml = true; }
+                    // Put WSMAN message parts into array
+                    if (xml == true){ xmlHolder.push(payload[x]); }
                 }
+                wsman = parseWsman(xmlHolder.join())
+                console.log(wsman);
                 let wsmanMessage, header, combinedMessage, payloadB64, response;
                 for (let x in emulatedClients){
                     if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
