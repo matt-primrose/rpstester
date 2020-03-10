@@ -163,10 +163,14 @@ function generateTestClientInformation(testMessage, index, callback){
     message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
     message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateFWNonce(20);
     message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
+    message.wsmanCmds.hostBasedSetupServiceResponse.messageId = 0;
+    message.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = null;
     message.wsmanCmds.certInjectionResponse = new Object();
     message.wsmanCmds.certInjectionResponse.returnValue = testMessage.wsmanCmds.certInjectionResponse.returnValue;
     message.wsmanCmds.adminSetupResponse = new Object();
     message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
+    message.wsmanCmds.setupResponse = new Object();
+    message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
     callback(getUUID(message.jsonCmds.payload.uuid), message);
 }
 
@@ -225,105 +229,32 @@ function connectToServer(message, callback){
                 //Parse through Payload and extract important pieces
                 for (let x in payload){
                     // Check for Authentication Header
-                    if (payload[x].substring(0,14) == "Authorization:"){ authHeader = true; }
+                    if (payload[x].substring(0,14) == "Authorization:"){ 
+                        authHeader = true; 
+                        if (settings.verbose) { console.log("authHeader: " + authHeader); }
+                    }
                     // Grab the UUID for this message
-                    if (payload[x].substring(0,5) == "Host:"){ uuid = payload[x].substring(6,42); }
+                    if (payload[x].substring(0,5) == "Host:"){ 
+                        uuid = payload[x].substring(6,42); 
+                        if (settings.verbose) { console.log("Host: " + uuid); }
+                    }
                     // Find where WSMAN message begins and extract message parts
-                    if (payload[x].substring(0,5) == "<?xml"){ xml = true; }
+                    if (payload[x].substring(0,5) == "<?xml"){ 
+                        xml = true; 
+                        if (settings.verbose) { console.log("XML Section Found"); }
+                    }
                     // Put WSMAN message parts into array
                     if (xml == true){ xmlHolder.push(payload[x]); }
                 }
                 wsman = parseWsman(xmlHolder.join())
-                console.log(wsman);
-                let wsmanMessage, header, combinedMessage, payloadB64, response;
+                if (settings.verbose && xml) { console.log(wsman); }
+                //let wsmanMessage, header, combinedMessage, payloadB64, response;
                 for (let x in emulatedClients){
                     if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
-                        switch (emulatedClients[x].step){
-                            case 0: //General Settings with no Authentication WSMan message from RPS
-                            if (settings.verbose) { console.log("Step 0 - Start"); }
-                                emulatedClients[x].messageId = generateMessageId(0);
-                                emulatedClients[x].digestRealm = generateDigestRealm();
-                                emulatedClients[x].step++;
-                                wsmanMessage = createWsmanMessage(0);
-                                header = createHeader(wsmanHeader.header.status.unauthorized, wsmanHeader.header.digestAuth, wsmanHeader.header.contentType[0], wsmanHeader.header.server, wsmanMessage.length, wsmanHeader.header.connection, null, null);
-                                combinedMessage = header + wsmanMessage.wsman;
-                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
-                                payloadB64 = Buffer.from(combinedMessage).toString('base64');
-                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payloadB64,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
-                                emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-                                if (settings.verbose) { console.log("Step 0 - End"); }
-                                break;
-                            case 1: //General Settings with Authentication WSMan message from RPS
-                                if (settings.verbose) { console.log("Step 1 - Start"); }
-                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
-                                emulatedClients[x].step++;
-                                wsmanMessage = createWsmanMessage(1, emulatedClients[x].messageId, emulatedClients[x].digestRealm);
-                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
-                                combinedMessage = header + wsmanMessage.wsman;
-                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
-                                payload = Buffer.from(combinedMessage).toString('base64');
-                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
-                                emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-                                if (settings.verbose) { console.log("Step 1 - End"); }
-                                break;
-                            case 2: //Host Base Setup Service WSMan message from RPS
-                                if (settings.verbose) { console.log("Step 2 - Start"); }
-                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
-                                emulatedClients[x].step++;
-                                emulatedClients[x].fwNonce = generateFWNonce(20);
-                                wsmanMessage = createWsmanMessage(2, emulatedClients[x].messageId, null, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, emulatedClients[x].wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, emulatedClients[x].fwNonce, null);
-                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
-                                combinedMessage = header + wsmanMessage.wsman;
-                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
-                                payload = Buffer.from(combinedMessage).toString('base64');
-                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
-                                emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-                                if (settings.verbose) { console.log("Step 2 - End"); }
-                                break;
-                            case 3: //Certificate Injection WSMan message from RPS
-                                if (settings.verbose) { console.log("Step 3 - Start"); }
-                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
-                                emulatedClients[x].step++;
-                                wsmanMessage = createWsmanMessage(3, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.certInjectionResponse.returnValue);
-                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
-                                combinedMessage = header + wsmanMessage.wsman;
-                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
-                                payload = Buffer.from(combinedMessage).toString('base64');
-                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
-                                emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-                                if (settings.verbose) { console.log("Step 3 - End"); }
-                                break;
-                            case 4: //Admin Control Setup WSMan message from RPS
-                                if (settings.verbose) { console.log("Step 4 - Start"); }
-                                emulatedClients[x].messageId = generateMessageId(emulatedClients[x].messageId);
-                                emulatedClients[x].step++;
-                                wsmanMessage = createWsmanMessage(4, emulatedClients[x].messageId, null, null, null, null, null, emulatedClients[x].wsmanCmds.adminSetupResponse.returnValue);
-                                header = createHeader(wsmanHeader.header.status.ok, null, wsmanHeader.header.contentType[1], wsmanHeader.header.server, wsmanMessage.length, null, wsmanHeader.header.xFrameOptions, wsmanHeader.header.encoding);
-                                combinedMessage = header + wsmanMessage.wsman;
-                                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                                if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
-                                payload = Buffer.from(combinedMessage).toString('base64');
-                                response = {"apiKey": emulatedClients[x].jsonCmds.apiKey,"appVersion":emulatedClients[x].jsonCmds.appVersion,"message":emulatedClients[x].jsonCmds.message,"method":"response","payload":payload,"protocolVersion":emulatedClients[x].jsonCmds.protocolVersion,"status":emulatedClients[x].jsonCmds.status};
-                                if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
-                                emulatedClients[x].tunnel.send(JSON.stringify(response));
-                                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-                                if (settings.verbose) { console.log("Step 4 - Start"); }
-                                break;
-                            default:
-                                break;
-                        }
+                        if (settings.verbose) { console.log("authHeader: " + authHeader); }
+                        let step = determineWsmanStep(wsman, authHeader);
+                        if (settings.verbose) { console.log("Sending this step to executeWsmanStage: " + step); }
+                        executeWsmanStage(step, emulatedClients[x]);
                     }
                 }
                 break;
@@ -369,6 +300,70 @@ function connectToServer(message, callback){
     });
 }
 
+function determineWsmanStep(wsmanObj, authHeader){
+    let stepVal, resourceVal, actionVal;
+    if (authHeader == false){ stepVal = 0; }
+    else {
+        for (var x = 0; x < wsmanResourceUri.length; x++){
+            if (settings.verbose) { console.log("wsmanResourceURI: " + wsmanResourceUri[x] + "\n\rwsmanObj.ResourceURI: " + wsmanObj.Header.ResourceURI); }
+            if (wsmanResourceUri[x] == wsmanObj.Header.ResourceURI){ resourceVal = x; break; }
+        }
+        for (var y = 0; y < wsmanAction.length; y++){
+            if (settings.verbose) { console.log("wsmanAction: " + wsmanAction[y] + "\n\rwsmanObj.Action: " + wsmanObj.Header.Action); }
+            if (wsmanAction[y] == wsmanObj.Header.Action) { actionVal = y; break; }
+        }
+        stepVal = resourceVal + actionVal + 1;
+        if (settings.verbose) { console.log("Step Value: " + stepVal); }
+    }
+    return stepVal;
+}
+
+const wsmanResourceUri = ['http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService',]
+const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup'];
+
+function executeWsmanStage(stage, client){
+    client.step = stage;
+    let returnValue = null;
+    let wsmanMessage, header, combinedMessage, payloadB64, response;
+    if (settings.verbose) { console.log("Step " + client.step + " - Start"); }
+    client.wsmanCmds.hostBasedSetupServiceResponse.messageId++;
+    if (settings.verbose) { console.log("Message ID: " + generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId)); }
+    if (client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm == null) client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = generateDigestRealm();
+    if (settings.verbose) { console.log("Digest Realm: " + client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm); }
+    if (client.step == 3) { returnValue = client.wsmanCmds.certInjectionResponse.returnValue; } 
+    if (client.step == 4) { returnValue = client.wsmanCmds.adminSetupResponse.returnValue; }
+    if (client.step == 5) { returnValue = client.wsmanCmds.setupResponse.returnValue; }
+    if (settings.verbose) { console.log("Return Value: " + returnValue); }
+    wsmanMessage = createWsmanMessage(client.step, generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
+    let headerInfo = new Object();
+    if (client.step == 0){
+        headerInfo.status = wsmanHeader.header.status.unauthorized;
+        headerInfo.digestAuth = wsmanHeader.header.digestAuth;
+        headerInfo.contentType = wsmanHeader.header.contentType[0];
+        headerInfo.connection = wsmanHeader.header.connection;
+        headerInfo.xFrameOptions = null;
+        headerInfo.encoding = null;
+    } else {
+        headerInfo.status = wsmanHeader.header.status.ok;
+        headerInfo.digestAuth = null;
+        headerInfo.contentType = wsmanHeader.header.contentType[1];
+        headerInfo.connection = null;
+        headerInfo.xFrameOptions = wsmanHeader.header.xFrameOptions;
+        headerInfo.encoding = wsmanHeader.header.encoding;
+    }
+    headerInfo.server = wsmanHeader.header.server;
+    header = createHeader(headerInfo.status, headerInfo.digestAuth, headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
+    combinedMessage = header + wsmanMessage.wsman;
+    if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
+    if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
+    payloadB64 = Buffer.from(combinedMessage).toString('base64');
+    response = {"apiKey": client.jsonCmds.apiKey,"appVersion":client.jsonCmds.appVersion,"message":client.jsonCmds.message,"method":"response","payload":payloadB64,"protocolVersion":client.jsonCmds.protocolVersion,"status":client.jsonCmds.status};
+    if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
+    client.tunnel.send(JSON.stringify(response));
+    if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+    if (settings.verbose) { console.log("Step " + stage + " - End"); }
+}
+
 function createWsmanMessage(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
     let message = {}
     switch (messageType){
@@ -390,14 +385,19 @@ function createWsmanMessage(messageType, messageId, digestRealm, currentControlM
             message.length = hostBasedSetupServiceResponse.length;
             break;
         case 3:
-            let certinjectionResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>3</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChainResponse</b:Action><b:MessageID>uuid:00000000-8086-8086-8086-000000000066</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AddNextCertInChain_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AddNextCertInChain_OUTPUT></a:Body></a:Envelope>';
+            let certinjectionResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>3</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChainResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AddNextCertInChain_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AddNextCertInChain_OUTPUT></a:Body></a:Envelope>';
             message.wsman = certinjectionResponse;
             message.length = certinjectionResponse.length;
             break;
         case 4:
-            let adminSetupResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>7</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetupResponse</b:Action><b:MessageID>uuid:00000000-8086-8086-8086-00000000006A</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AdminSetup_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AdminSetup_OUTPUT></a:Body></a:Envelope>';
+            let adminSetupResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>7</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetupResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:AdminSetup_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:AdminSetup_OUTPUT></a:Body></a:Envelope>';
             message.wsman = adminSetupResponse;
             message.length = adminSetupResponse.length;
+            break;
+        case 5:
+            let setupResponse = '<?xml version="1.0" encoding="UTF-8"?><a:Envelope xmlns:a="http://www.w3.org/2003/05/soap-envelope" xmlns:b="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:c="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd" xmlns:d="http://schemas.xmlsoap.org/ws/2005/02/trust" xmlns:e="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:f="http://schemas.dmtf.org/wbem/wsman/1/cimbinding.xsd" xmlns:g="http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><a:Header><b:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</b:To><b:RelatesTo>7</b:RelatesTo><b:Action a:mustUnderstand="true">http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/SetupResponse</b:Action><b:MessageID>uuid:'+messageId+'</b:MessageID><c:ResourceURI>http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService</c:ResourceURI></a:Header><a:Body><g:Setup_OUTPUT><g:ReturnValue>'+returnValue+'</g:ReturnValue></g:Setup_OUTPUT></a:Body></a:Envelope>';
+            message.wsman = setupResponse;
+            message.length = setupResponse.length;
             break;
         default:
             break;
@@ -421,7 +421,6 @@ function createHeader(status, auth, contentType, server, contentLength, connecti
 function generateFWNonce(length){
     let nonce = crypto.randomBytes(length).toString('hex'); 
     return nonce;
-    
 }
 
 function generateUuid(){
@@ -459,7 +458,8 @@ function getUUID(uuid) {
   }
 
 function generateMessageId(previousMessageId){
-    return previousMessageId++;
+    let messageId = "00000000-8086-8086-8086-00000000000" + previousMessageId.toString()
+    return messageId;
 }
 
 function generateDigestRealm(){
