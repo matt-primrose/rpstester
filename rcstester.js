@@ -45,6 +45,7 @@ let wsmanHeader;
 
 // Execute based on incoming arguments
 function run(argv) {
+    // Validate command line parameters
     let args = parseArguments(argv);
     if ((typeof args.url) == 'string') { settings.url = args.url; }
     if ((typeof args.num) == 'string') { settings.num = parseInt(args.num); }
@@ -56,8 +57,14 @@ function run(argv) {
         startTest();
     }
 }
+
+// Cleanly exit the application and provide an exit code to STDOUT
 function exit(status) { if (status == null) { status = 0; } try { process.exit(status); } catch (e) { } }
+
+// Parse command line arguments when running out of Node.  TODO: Update this to take command line arguments when running out of NPM Start Script
 function parseArguments(argv) {let r = {};for (let i in argv) {i = parseInt(i);if (argv[i].startsWith('--') == true) {let key = argv[i].substring(2).toLowerCase();let val = true;if (((i + 1) < argv.length) && (argv[i + 1].startsWith('--') == false)) {val = argv[i + 1];}r[key] = val;}}return r;}
+
+// Present instructions to user if missing required parameters aren't provided at the command line
 function consoleHelp(){
     oamtct();
     console.log('RCS Scale Tester ver. ' + rcsTesterVersion);
@@ -69,7 +76,9 @@ function consoleHelp(){
     exit(1); return;
 }
 
+// Entry point for tester
 function startTest(){
+    // Initialize global variables for tracking emulated clients and test results
     emulatedClients = new Object();
     completedTests = 0;
     failedTests = 0;
@@ -80,10 +89,17 @@ function startTest(){
     expectedFailedTests = 0;
     expectedPassedTests = 0;
 
+    // Load test cases from testmessages.json file
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
+
+    // Evaluate test case information and predict pass/fail results
     predictResults(testfile.testCases, settings.num);
+    
+    // Initialize the variable that holds the WSMAN Header data
     wsmanHeader = testfile.wsmanTestMessages;
+
+    // Create the test patterns to be run based on the test cases.
     let testPattern = 0;
     numTestPatterns = (settings.num > testfile.testCases.length ? testfile.testCases.length : settings.num);
     console.log('Generating Test Client Information...');
@@ -95,9 +111,12 @@ function startTest(){
         testPattern++;
     }
     console.log('Testing Data Generation Complete.  Starting tests...');
+
+    // Launch the connection manager queue for executing tests
     connectionManagerQueue();
 }
 
+// Manages the queue of emulated clients.  Also throttles the number of connections based on the hard coded values maxWsConnections & batchSize
 function connectionManagerQueue(){
     for (let x in emulatedClients){
         if (emulatedClients[x].index < (batchSize * connectionIndex)){
@@ -111,6 +130,7 @@ function connectionManagerQueue(){
     connectionIndex++;
 }
 
+// Checks for available execution slots
 function connectionSlotAvailable(){
     if (curWsConnections == 0){
         return true;
@@ -119,6 +139,7 @@ function connectionSlotAvailable(){
     }
 }
 
+// Starts the emulated client connection to server.  Prompts the recording of test results when test complets and test summary when test run completes
 function connectionManagerEx(client){
     connectToServer(client, function(resp, testComplete, testPass, testType, testCaseName){
         let guidCheck = false;
@@ -131,6 +152,7 @@ function connectionManagerEx(client){
     });
 }
 
+// Processes the test client information from the test cases.  Creates global object to hold each test client's data
 function generateTestClientInformation(testMessage, index, callback){
     let message = new Object();
     message.complete = false;
@@ -161,7 +183,7 @@ function generateTestClientInformation(testMessage, index, callback){
     message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
     message.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes = testMessage.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes;
     message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
-    message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateFWNonce(20);
+    message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateNonce(20);
     message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
     message.wsmanCmds.hostBasedSetupServiceResponse.messageId = 0;
     message.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = null;
@@ -174,11 +196,13 @@ function generateTestClientInformation(testMessage, index, callback){
     callback(getUUID(message.jsonCmds.payload.uuid), message);
 }
 
+// Handles WebSocket connection and message processing
 function connectToServer(message, callback){
     let WebSocket = require('ws');
     let ws = new WebSocket(settings.url);
     ws.on('open', function(){
         for (let x in emulatedClients){
+            // Sends initial message from test client to server
             if (message.jsonCmds.payload.uuid == emulatedClients[x].jsonCmds.payload.uuid){
                 let ppcMessage = JSON.parse(JSON.stringify(message.jsonCmds));
                 if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
@@ -193,6 +217,7 @@ function connectToServer(message, callback){
             }
         }
     });
+    // Processes messages back from server
     ws.on('message', function(data){
         if (settings.verbose) { console.log("---RECEIVED MESSAGE FROM RPS---"); }
         let cmd = null;
@@ -200,6 +225,7 @@ function connectToServer(message, callback){
         let uuid = null;
         let wsman = null;
         let authHeader = false;
+        // Parse the message
         try {
             cmd = JSON.parse(data);
             if (settings.verbose) { console.log("JSON Msg: \n\r" + JSON.stringify(cmd)); }
@@ -213,15 +239,14 @@ function connectToServer(message, callback){
             
         }
         switch (cmd.method){
+            // If message contains WSMAN message, parse and process
             case 'wsman': {
                 // Decode payload from JSON message
                 let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
                 if (settings.verbose) { console.log("PAYLOAD Msg: \n\r" + JSON.stringify(pl)); }
                 if (settings.verbose) { console.log("---END OF MESSAGE---"); }
-                //console.log(pl);
                 // Split payload up so we can extract important pieces
                 payload = pl.split("\r\n");
-                //console.log(payload);
                 // Set flag for getting WSMAN
                 let xml = false;
                 // Create WSMAN temporary holder
@@ -259,6 +284,7 @@ function connectToServer(message, callback){
                 }
                 break;
             }
+            // If message is a final success response, close connection and record results
             case 'success': {
                 //if(callback) { callback(cmd); }
                 emulatedClients[cmd.message.substring(7,43)].complete = true;
@@ -266,13 +292,14 @@ function connectToServer(message, callback){
                 let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
                 curWsConnections--;
                 if (connectionSlotAvailable()){
-                    //console.log('running CMQ');
+                    if (settings.verbose) { console.log('running CMQ'); }
                     connectionManagerQueue();
                 }
                 console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
                 callback(cmd, true, true, null, testCaseName);
                 break;
             }
+            // If message is an error message, close connection and record results
             case 'error': {
                 //if(callback) { callback(cmd); }
                 emulatedClients[cmd.message.substring(7,43)].complete = true;
@@ -280,13 +307,14 @@ function connectToServer(message, callback){
                 let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
                 curWsConnections--;
                 if (connectionSlotAvailable()){
-                    //console.log('running CMQ');
+                    if (settings.verbose) { console.log('running CMQ'); }
                     connectionManagerQueue();
                 }
                 console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
                 callback(cmd, true, false, null, testCaseName);
                 break;
             }
+            // Catches any unknown messages.  Should never see this unless new message types are added
             default: {
                 if (cmd.method) { 
                     if (settings.verbose) { console.log('Unhandled server response, command: ' + data); }
@@ -295,11 +323,13 @@ function connectToServer(message, callback){
             }
         }
     });
+    // Handles WebSocket errors
     ws.on('error', function(err){
         if (settings.verbose) { console.log('Server error received: ' + err); }
     });
 }
 
+// Parses the WSMAN object and determines where in the activation flow the emulated client is currently
 function determineWsmanStep(wsmanObj, authHeader){
     let stepVal, resourceVal, actionVal;
     if (authHeader == false){ stepVal = 0; }
@@ -318,9 +348,11 @@ function determineWsmanStep(wsmanObj, authHeader){
     return stepVal;
 }
 
+// Arrays for holding the WSMAN ResourceURI and Action strings for determining the current request from the server
 const wsmanResourceUri = ['http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService',]
 const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup'];
 
+// Constructs the emulated PPC message and sends to server based on the current client execution stage
 function executeWsmanStage(stage, client){
     client.step = stage;
     let returnValue = null;
@@ -364,6 +396,7 @@ function executeWsmanStage(stage, client){
     if (settings.verbose) { console.log("Step " + stage + " - End"); }
 }
 
+// Generates the WSMAN body
 function createWsmanMessage(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
     let message = {}
     switch (messageType){
@@ -405,10 +438,11 @@ function createWsmanMessage(messageType, messageId, digestRealm, currentControlM
     return message;
 }
 
+// Generates the WSMAN header
 function createHeader(status, auth, contentType, server, contentLength, connection, xFrame, encoding){
     let header = null;
     if (status !== null) { header = status + "\r\n";}
-    if (auth !== null) { header  += auth.auth + 'Digest realm="' + generateDigestRealm() + '", ' + auth.nonce + '"' + generateFWNonce(16) + '", ' + auth.stale + '"false", ' + auth.qop + '"auth"\r\n'; }
+    if (auth !== null) { header  += auth.auth + 'Digest realm="' + generateDigestRealm() + '", ' + auth.nonce + '"' + generateNonce(16) + '", ' + auth.stale + '"false", ' + auth.qop + '"auth"\r\n'; }
     if (contentType !== null) { header  += 'Content-Type: ' +contentType + '\r\n'; }
     if (server !== null) { header  += 'Server: ' + server + '\r\n'; }
     if (contentLength !== null) { header  += 'Content-Length: ' + contentLength + '\r\n'; }
@@ -418,21 +452,21 @@ function createHeader(status, auth, contentType, server, contentLength, connecti
     return header;
 }
 
-function generateFWNonce(length){
+// Creates a nonce for a given length
+function generateNonce(length){
     let nonce = crypto.randomBytes(length).toString('hex'); 
     return nonce;
 }
 
+// Creates a UUID
 function generateUuid(){
     const uuidv4 = require('uuid').v4;
     let buf = new Array();
     let amtUuid = uuidv4(null, buf);
-    //console.log(amtUuid);
-    //console.log(getUUID(amtUuid));
-    //let uuid = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.randomFillSync(new Uint8Array(1))[0] & 15 >> c / 4));
     return amtUuid;
 }
 
+// Parses a UUID from a Byte Array
 function getUUID(uuid) {
     uuid = Buffer.from(uuid);
     let guid = [
@@ -441,32 +475,36 @@ function getUUID(uuid) {
       zeroLeftPad(uuid.readUInt16LE(6).toString(16), 4),
       zeroLeftPad(uuid.readUInt16BE(8).toString(16), 4),
       zeroLeftPad(uuid.slice(10).toString("hex").toLowerCase(), 12)].join("-");
-
     return guid;
-  }
+}
 
-  function zeroLeftPad(str, len) {
+// Helper function for getUUID
+function zeroLeftPad(str, len) {
     if (len == null && typeof len != "number") {
-      return null;
+        return null;
     }
     if (str == null) str = ""; // If null, this is to generate zero leftpad string
     let zlp = "";
     for (var i = 0; i < len - str.length; i++) {
-      zlp += "0";
+        zlp += "0";
     }
     return zlp + str;
-  }
+}
 
+// Returns the formatted MessageID for WSMAN messages
 function generateMessageId(previousMessageId){
     let messageId = "00000000-8086-8086-8086-00000000000" + previousMessageId.toString()
     return messageId;
 }
 
+// Creates the Digest Realm needed for AMT Activation
 function generateDigestRealm(){
     let digestRealm = null;
     digestRealm = 'Digest:'+getRandomHex(4)+'0000000000000000000000000000';
     return digestRealm;
 }
+
+// Creates a random hex value of a given length
 function getRandomHex(length){
     let num;
     for (var x = 0; x < length; x++){
@@ -476,6 +514,7 @@ function getRandomHex(length){
     return num;
 }
 
+// Creates a random OSAdmin password
 function generateOSAdminPassword(){
     let length = 32;
     let password = '';
@@ -500,6 +539,7 @@ function generateOSAdminPassword(){
     return password;
 }
 
+// Records the test results when a test case completes
 function recordTestResults(testComplete, testPass, testType, testCaseName, expectedResult){
     let expectedResultBool = (expectedResult == "pass" ? true : false);
     if (testComplete == true) { completedTests++ ;}
@@ -510,6 +550,7 @@ function recordTestResults(testComplete, testPass, testType, testCaseName, expec
     if (testType == 'ccm') { ccmTests++; }
 }
 
+// Processes all of the test results when the test run completes and summarizes them for the user
 function processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests){
     let red = "\x1b[31m";
     let white = "\x1b[37m";
@@ -532,6 +573,7 @@ function processTestResults(requestedTests, acmTests, ccmTests, passedTests, fai
     console.log(white,'CCM tests ran:             ' + ccmTests);
 }
 
+// Predicts the test results based on the test case information.  Used to determine if test cases acheive the desired state
 function predictResults(testMessages, iterations){
     let y = 0;
     for (let x = 0; x < iterations; x++){
