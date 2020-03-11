@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /** 
-* @description A scale tester for RCS.
+* @description A scale tester for RPS.
 * @author Matt Primrose
 * @version v0.0.1
 */
@@ -24,7 +24,7 @@ limitations under the License.
 const fs = require('fs');
 const crypto = require('crypto');
 const parseWsman = require('./amt-xml').ParseWsman;
-const rcsTesterVersion = '0.0.1';
+const rpsTesterVersion = '0.0.1';
 const settings = new Object();
 let emulatedClients;
 let completedTests;
@@ -67,10 +67,10 @@ function parseArguments(argv) {let r = {};for (let i in argv) {i = parseInt(i);i
 // Present instructions to user if missing required parameters aren't provided at the command line
 function consoleHelp(){
     oamtct();
-    console.log('RCS Scale Tester ver. ' + rcsTesterVersion);
-    console.log('No action specified, use rcstester like this:\r\n');
-    console.log('  rcstester --url [wss://server] --num [number]\r\n');
-    console.log('  URL      - Server fqdn or IP:port of the RCS.');
+    console.log('RPS Scale Tester ver. ' + rpsTesterVersion);
+    console.log('No action specified, use rpstester like this:\r\n');
+    console.log('  rpstester --url [wss://server] --num [number]\r\n');
+    console.log('  URL      - Server fqdn or IP:port of the RPS.');
     console.log('  NUM      - Number of connections to emulate.');
     console.log('  VERBOSE  - Verbose logging to console.');
     exit(1); return;
