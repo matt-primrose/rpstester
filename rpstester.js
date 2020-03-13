@@ -33,8 +33,6 @@ let failedTests;
 let passedTests;
 let numTestPatterns;
 let failedTestCaseNames;
-let acmTests;
-let ccmTests;
 let expectedFailedTests;
 let expectedPassedTests;
 let maxWsConnections = 500;
@@ -84,8 +82,6 @@ function startTest(){
     failedTests = 0;
     failedTestCaseNames = new Array();
     passedTests = 0;
-    acmTests = 0;
-    ccmTests = 0;
     expectedFailedTests = 0;
     expectedPassedTests = 0;
 
@@ -93,23 +89,27 @@ function startTest(){
     requestedTests = settings.num;
     let testfile = JSON.parse(fs.readFileSync(__dirname + '/testmessages.json', 'utf8'));
 
-    // Evaluate test case information and predict pass/fail results
-    predictResults(testfile.testCases, settings.num);
-    
     // Initialize the variable that holds the WSMAN Header data
     wsmanHeader = testfile.wsmanTestMessages;
 
     // Create the test patterns to be run based on the test cases.
-    let testPattern = 0;
-    numTestPatterns = (settings.num > testfile.testCases.length ? testfile.testCases.length : settings.num);
     console.log('Generating Test Client Information...');
+    let activeTCs = new Array();
+    for (let i in testfile.testCases){
+        if (testfile.testCases[i].include == true) { activeTCs.push(i); }
+    }
+    let y = 0;
     for (let x = 0; x < settings.num; x++){
-        if (testPattern == numTestPatterns){ testPattern = 0; }
-        generateTestClientInformation(testfile.testCases[testPattern], x, function(uuid, message){
+        if (y == activeTCs.length) { y = 0; }
+        generateTestClientInformation(testfile.testCases[activeTCs[y]], x, function(uuid, message){
             emulatedClients[uuid] = message;
         });
-        testPattern++;
+        y++;
     }
+    
+    numTestPatterns = (settings.num > emulatedClients.length ? emulatedClients.length : settings.num);
+    // Evaluate test case information and predict pass/fail results
+    predictResults(emulatedClients, settings.num);
     console.log('Testing Data Generation Complete.  Starting tests...');
 
     // Launch the connection manager queue for executing tests
@@ -121,6 +121,7 @@ function connectionManagerQueue(){
     for (let x in emulatedClients){
         if (emulatedClients[x].index < (batchSize * connectionIndex)){
             if (emulatedClients[x].complete == false){
+                console.log("Running Test Case: " + emulatedClients[x].testCaseName);
                 connectionManagerEx(emulatedClients[x]);
             } 
         } else {
@@ -141,59 +142,62 @@ function connectionSlotAvailable(){
 
 // Starts the emulated client connection to server.  Prompts the recording of test results when test complets and test summary when test run completes
 function connectionManagerEx(client){
-    connectToServer(client, function(resp, testComplete, testPass, testType, testCaseName){
+    connectToServer(client, function(resp, testComplete, testPass, testCaseName){
         let guidCheck = false;
         if (client.uuid == resp.uuid) { guidCheck = true; }
         testPass = (testPass && guidCheck);
-        recordTestResults(testComplete, testPass, testType, testCaseName, client.expectedResult);
+        recordTestResults(testComplete, testPass, testCaseName, client.expectedResult);
+        console.log("completedTests = " + completedTests + "\n\rrequestTests = " + requestedTests);
         if (completedTests == requestedTests) {
-            processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests);
+            processTestResults(requestedTests, passedTests, failedTests);
         }
     });
 }
 
 // Processes the test client information from the test cases.  Creates global object to hold each test client's data
 function generateTestClientInformation(testMessage, index, callback){
-    let message = new Object();
-    message.complete = false;
-    message.index = index;
-    message.testCaseName = testMessage.testCaseName;
-    message.testCaseDescription = testMessage.testCaseDescription;
-    message.expectedResult = testMessage.expectedResult;
-    message.jsonCmds = new Object();
-    message.jsonCmds.apiKey = testMessage.jsonCmds.apiKey;
-    message.jsonCmds.appVersion = testMessage.jsonCmds.appVersion;
-    message.jsonCmds.message = testMessage.jsonCmds.message;
-    message.jsonCmds.method = testMessage.jsonCmds.method;
-    message.jsonCmds.protocolVersion = testMessage.jsonCmds.protocolVersion;
-    message.jsonCmds.status = testMessage.jsonCmds.status;
-    message.jsonCmds.payload = new Object();
-    message.jsonCmds.payload.build = testMessage.jsonCmds.payload.build;
-    message.jsonCmds.payload.certHashes = testMessage.jsonCmds.payload.certHashes;
-    message.jsonCmds.payload.client = testMessage.jsonCmds.payload.client;
-    message.jsonCmds.payload.currentMode = testMessage.jsonCmds.payload.currentMode;
-    message.jsonCmds.payload.fqdn = testMessage.jsonCmds.payload.fqdn;
-    message.jsonCmds.payload.password = generateOSAdminPassword();
-    message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
-    message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
-    message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
-    message.jsonCmds.payload.uuid = generateUuid();
-    message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
-    message.wsmanCmds = new Object();
-    message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
-    message.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes = testMessage.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes;
-    message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
-    message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateNonce(20);
-    message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
-    message.wsmanCmds.hostBasedSetupServiceResponse.messageId = 0;
-    message.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = null;
-    message.wsmanCmds.certInjectionResponse = new Object();
-    message.wsmanCmds.certInjectionResponse.returnValue = testMessage.wsmanCmds.certInjectionResponse.returnValue;
-    message.wsmanCmds.adminSetupResponse = new Object();
-    message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
-    message.wsmanCmds.setupResponse = new Object();
-    message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
-    callback(getUUID(message.jsonCmds.payload.uuid), message);
+    if (testMessage.include) {
+        let message = new Object();
+        message.complete = false;
+        message.index = index;
+        message.testCaseName = testMessage.testCaseName;
+        message.testCaseDescription = testMessage.testCaseDescription;
+        message.expectedResult = testMessage.expectedResult;
+        message.jsonCmds = new Object();
+        message.jsonCmds.apiKey = testMessage.jsonCmds.apiKey;
+        message.jsonCmds.appVersion = testMessage.jsonCmds.appVersion;
+        message.jsonCmds.message = testMessage.jsonCmds.message;
+        message.jsonCmds.method = testMessage.jsonCmds.method;
+        message.jsonCmds.protocolVersion = testMessage.jsonCmds.protocolVersion;
+        message.jsonCmds.status = testMessage.jsonCmds.status;
+        message.jsonCmds.payload = new Object();
+        message.jsonCmds.payload.build = testMessage.jsonCmds.payload.build;
+        message.jsonCmds.payload.certHashes = testMessage.jsonCmds.payload.certHashes;
+        message.jsonCmds.payload.client = testMessage.jsonCmds.payload.client;
+        message.jsonCmds.payload.currentMode = testMessage.jsonCmds.payload.currentMode;
+        message.jsonCmds.payload.fqdn = testMessage.jsonCmds.payload.fqdn;
+        message.jsonCmds.payload.password = generateOSAdminPassword();
+        message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
+        message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
+        message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
+        message.jsonCmds.payload.uuid = generateUuid();
+        message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
+        message.wsmanCmds = new Object();
+        message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
+        message.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes = testMessage.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes;
+        message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
+        message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateNonce(20);
+        message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
+        message.wsmanCmds.hostBasedSetupServiceResponse.messageId = 0;
+        message.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = null;
+        message.wsmanCmds.certInjectionResponse = new Object();
+        message.wsmanCmds.certInjectionResponse.returnValue = testMessage.wsmanCmds.certInjectionResponse.returnValue;
+        message.wsmanCmds.adminSetupResponse = new Object();
+        message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
+        message.wsmanCmds.setupResponse = new Object();
+        message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
+        callback(getUUID(message.jsonCmds.payload.uuid), message);
+    }
 }
 
 // Handles WebSocket connection and message processing
@@ -286,7 +290,8 @@ function connectToServer(message, callback){
             }
             // If message is a final success response, close connection and record results
             case 'success': {
-                //if(callback) { callback(cmd); }
+                //console.log(cmd.message.substring(7,43));
+                //console.log(emulatedClients);
                 emulatedClients[cmd.message.substring(7,43)].complete = true;
                 emulatedClients[cmd.message.substring(7,43)].tunnel.close();
                 let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
@@ -301,7 +306,8 @@ function connectToServer(message, callback){
             }
             // If message is an error message, close connection and record results
             case 'error': {
-                //if(callback) { callback(cmd); }
+                //console.log(cmd.message.substring(7,43));
+                //console.log(emulatedClients);
                 emulatedClients[cmd.message.substring(7,43)].complete = true;
                 emulatedClients[cmd.message.substring(7,43)].tunnel.close();
                 let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
@@ -475,6 +481,7 @@ function getUUID(uuid) {
       zeroLeftPad(uuid.readUInt16LE(6).toString(16), 4),
       zeroLeftPad(uuid.readUInt16BE(8).toString(16), 4),
       zeroLeftPad(uuid.slice(10).toString("hex").toLowerCase(), 12)].join("-");
+
     return guid;
 }
 
@@ -540,18 +547,16 @@ function generateOSAdminPassword(){
 }
 
 // Records the test results when a test case completes
-function recordTestResults(testComplete, testPass, testType, testCaseName, expectedResult){
+function recordTestResults(testComplete, testPass, testCaseName, expectedResult){
     let expectedResultBool = (expectedResult == "pass" ? true : false);
     if (testComplete == true) { completedTests++ ;}
     if (testPass == true) { passedTests++; }
     if (testPass == false) { failedTests++; }
     if (testCaseName !== null && testPass !== expectedResultBool) { failedTestCaseNames.push(testCaseName); }
-    if (testType == 'acm') { acmTests++; }
-    if (testType == 'ccm') { ccmTests++; }
 }
 
 // Processes all of the test results when the test run completes and summarizes them for the user
-function processTestResults(requestedTests, acmTests, ccmTests, passedTests, failedTests){
+function processTestResults(requestedTests, passedTests, failedTests){
     let red = "\x1b[31m";
     let white = "\x1b[37m";
     let green = "\x1b[32m";
@@ -569,18 +574,18 @@ function processTestResults(requestedTests, acmTests, ccmTests, passedTests, fai
     console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
     console.log(unsuccessfulResults,'Unsuccessful results:      ' + failedTests);
     console.log(white,'Failing Test Cases:             ' + failedTestCaseNames.toString());
-    console.log(white,'ACM tests ran:             ' + acmTests);
-    console.log(white,'CCM tests ran:             ' + ccmTests);
 }
 
 // Predicts the test results based on the test case information.  Used to determine if test cases acheive the desired state
-function predictResults(testMessages, iterations){
+function predictResults(clients, iterations){
     let y = 0;
-    for (let x = 0; x < iterations; x++){
-        if (y == testMessages.length) { y = 0; }
-        if (testMessages[y].expectedResult == 'pass') { expectedPassedTests++; }
-        if (testMessages[y].expectedResult == 'fail') { expectedFailedTests++; }
-        y++
+    while (y < iterations){
+        for (let x in clients){
+            if (clients[x].expectedResult == 'pass') { expectedPassedTests++; }
+            if (clients[x].expectedResult == 'fail') { expectedFailedTests++; }
+            y++;
+            if (y == iterations) { break; }
+        }
     }
 }
 
