@@ -121,7 +121,7 @@ function connectionManagerQueue(){
     for (let x in emulatedClients){
         if (emulatedClients[x].index < (batchSize * connectionIndex)){
             if (emulatedClients[x].complete == false){
-                console.log("Running Test Case: " + emulatedClients[x].testCaseName);
+                //console.log("Running Test Case: " + emulatedClients[x].testCaseName);
                 connectionManagerEx(emulatedClients[x]);
             } 
         } else {
@@ -147,7 +147,7 @@ function connectionManagerEx(client){
         if (client.uuid == resp.uuid) { guidCheck = true; }
         testPass = (testPass && guidCheck);
         recordTestResults(testComplete, testPass, testCaseName, client.expectedResult);
-        console.log("completedTests = " + completedTests + "\n\rrequestTests = " + requestedTests);
+        // console.log("completedTests = " + completedTests + "\n\rrequestTests = " + requestedTests);
         if (completedTests == requestedTests) {
             processTestResults(requestedTests, passedTests, failedTests);
         }
@@ -560,9 +560,6 @@ function generateOSAdminPassword(){
 function recordTestResults(testComplete, testPass, testCaseName, expectedResult){
     let expectedResultBool = (expectedResult == "pass" ? true : false);
     let testPassCheck = (expectedResultBool == testPass);
-    console.log("testPass Value: " + testPass);
-    console.log("testCase Name: " + testCaseName);
-    console.log("Expected Result: " + expectedResult);
     if (testComplete == true) { completedTests++ ;}
     if (testPassCheck == true) {
         if (expectedResult == "pass") { passedTests++; } 
