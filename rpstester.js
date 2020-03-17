@@ -180,7 +180,7 @@ function generateTestClientInformation(testMessage, index, callback){
         message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
         message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
         message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
-        message.jsonCmds.payload.uuid = generateUuid();
+        if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = generateUuid(); }
         message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
         message.wsmanCmds = new Object();
         message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
@@ -196,7 +196,7 @@ function generateTestClientInformation(testMessage, index, callback){
         message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
         message.wsmanCmds.setupResponse = new Object();
         message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
-        callback(getUUID(message.jsonCmds.payload.uuid), message);
+        callback(getUUID((message.jsonCmds.payload.uuid ? message.jsonCmds.payload.uuid : generateUuid())), message);
     }
 }
 
