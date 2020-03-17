@@ -180,7 +180,7 @@ function generateTestClientInformation(testMessage, index, callback){
         message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
         message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
         message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
-        if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = generateUuid(); }
+        if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = generateUuid(); } else { message.jsonCmds.payload.uuid = testMessage.jsonCmds.payload.uuid; }
         message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
         message.wsmanCmds = new Object();
         message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
@@ -229,6 +229,7 @@ function connectToServer(message, callback){
         let uuid = null;
         let wsman = null;
         let authHeader = false;
+        let testResult = null;
         // Parse the message
         try {
             cmd = JSON.parse(data);
@@ -275,9 +276,9 @@ function connectToServer(message, callback){
                     // Put WSMAN message parts into array
                     if (xml == true){ xmlHolder.push(payload[x]); }
                 }
+                // Parse the full WSMAN message and turn into an Object
                 wsman = parseWsman(xmlHolder.join())
                 if (settings.verbose && xml) { console.log(wsman); }
-                //let wsmanMessage, header, combinedMessage, payloadB64, response;
                 for (let x in emulatedClients){
                     if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
                         if (settings.verbose) { console.log("authHeader: " + authHeader); }
@@ -290,34 +291,42 @@ function connectToServer(message, callback){
             }
             // If message is a final success response, close connection and record results
             case 'success': {
-                //console.log(cmd.message.substring(7,43));
-                //console.log(emulatedClients);
-                emulatedClients[cmd.message.substring(7,43)].complete = true;
-                emulatedClients[cmd.message.substring(7,43)].tunnel.close();
-                let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
+                let key = cmd.message.substring(7,43);
+                emulatedClients[key].complete = true;
+                emulatedClients[key].tunnel.close();
+                let testCaseName = emulatedClients[key].testCaseName;
                 curWsConnections--;
                 if (connectionSlotAvailable()){
                     if (settings.verbose) { console.log('running CMQ'); }
                     connectionManagerQueue();
                 }
                 console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
-                callback(cmd, true, true, null, testCaseName);
+                testResult = true;
+                callback(cmd, emulatedClients[key].complete, testResult, testCaseName);
                 break;
             }
             // If message is an error message, close connection and record results
             case 'error': {
-                //console.log(cmd.message.substring(7,43));
-                //console.log(emulatedClients);
-                emulatedClients[cmd.message.substring(7,43)].complete = true;
-                emulatedClients[cmd.message.substring(7,43)].tunnel.close();
-                let testCaseName = emulatedClients[cmd.message.substring(7,43)].testCaseName;
+                let key = cmd.message.substring(7,43);
+                if (!(key in emulatedClients)){
+                    for (let x in emulatedClients){
+                        if (emulatedClients[x].jsonCmds.payload.uuid == false){
+                            key = x;
+                            break;
+                        }
+                    }
+                }
+                emulatedClients[key].complete = true;
+                emulatedClients[key].tunnel.close();
+                let testCaseName = emulatedClients[key].testCaseName;
                 curWsConnections--;
                 if (connectionSlotAvailable()){
                     if (settings.verbose) { console.log('running CMQ'); }
                     connectionManagerQueue();
                 }
                 console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
-                callback(cmd, true, false, null, testCaseName);
+                testResult = false;
+                callback(cmd, emulatedClients[key].complete, testResult, testCaseName);
                 break;
             }
             // Catches any unknown messages.  Should never see this unless new message types are added
@@ -331,7 +340,7 @@ function connectToServer(message, callback){
     });
     // Handles WebSocket errors
     ws.on('error', function(err){
-        if (settings.verbose) { console.log('Server error received: ' + err); }
+        console.log('Server error received: ' + err);
     });
 }
 
@@ -474,6 +483,7 @@ function generateUuid(){
 
 // Parses a UUID from a Byte Array
 function getUUID(uuid) {
+    if (uuid == false) { return false; }
     uuid = Buffer.from(uuid);
     let guid = [
       zeroLeftPad(uuid.readUInt32LE(0).toString(16), 8),
@@ -549,10 +559,18 @@ function generateOSAdminPassword(){
 // Records the test results when a test case completes
 function recordTestResults(testComplete, testPass, testCaseName, expectedResult){
     let expectedResultBool = (expectedResult == "pass" ? true : false);
+    let testPassCheck = (expectedResultBool == testPass);
+    console.log("testPass Value: " + testPass);
+    console.log("testCase Name: " + testCaseName);
+    console.log("Expected Result: " + expectedResult);
     if (testComplete == true) { completedTests++ ;}
-    if (testPass == true) { passedTests++; }
-    if (testPass == false) { failedTests++; }
-    if (testCaseName !== null && testPass !== expectedResultBool) { failedTestCaseNames.push(testCaseName); }
+    if (testPassCheck == true) {
+        if (expectedResult == "pass") { passedTests++; } 
+        else { failedTests++; }
+    } else {
+        if (testCaseName !== null) { failedTestCaseNames.push(testCaseName); }
+        else { failedTestCaseNames.push("Missing TC Name"); }
+    }
 }
 
 // Processes all of the test results when the test run completes and summarizes them for the user

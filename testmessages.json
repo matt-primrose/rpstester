@@ -5,7 +5,7 @@
         {
             "testCaseName":"TC001",
             "testCaseDescription": "Activate in Admin Control Mode",
-            "include": false,
+            "include": true,
             "expectedResult":"pass",
             "jsonCmds": {
                 "apiKey": "key",
@@ -42,7 +42,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -69,7 +69,7 @@
         {
             "testCaseName":"TC002",
             "testCaseDescription": "No matching hashes",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -86,7 +86,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -113,7 +113,7 @@
         {
             "testCaseName":"TC003",
             "testCaseDescription": "FW version 11.8 and Build less than 3000",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -150,7 +150,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -177,7 +177,7 @@
         {
             "testCaseName":"TC004",
             "testCaseDescription": "Profile doesn't exist on server",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -214,7 +214,7 @@
                     "profile":"badprofile",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -241,7 +241,7 @@
         {
             "testCaseName":"TC005",
             "testCaseDescription": "AMT Version is 100.100.100",
-            "include": false,
+            "include": true,
             "expectedResult":"pass",
             "jsonCmds": {
                 "apiKey": "key",
@@ -278,7 +278,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"1000.100.100"
                 },
                 "protocolVersion": "2.0.0",
@@ -305,7 +305,7 @@
         {
             "testCaseName":"TC006",
             "testCaseDescription": "Current Control Mode 1",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -342,7 +342,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -369,7 +369,7 @@
         {
             "testCaseName":"TC007",
             "testCaseDescription": "Activate in Client Control Mode",
-            "include": false,
+            "include": true,
             "expectedResult":"pass",
             "jsonCmds": {
                 "apiKey": "key",
@@ -406,7 +406,7 @@
                     "profile":"PROFILE2",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -433,7 +433,7 @@
         {
             "testCaseName":"TC008",
             "testCaseDescription": "Cert Injection Failure response in WSMan message",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -470,7 +470,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -497,7 +497,7 @@
         {
             "testCaseName":"TC009",
             "testCaseDescription": "Admin Control Mode Activation Failure response in WSMan message",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -534,7 +534,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -561,7 +561,7 @@
         {
             "testCaseName":"TC010",
             "testCaseDescription": "Client Control Mode Activation Failure response in WSMan message",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -598,7 +598,7 @@
                     "profile":"PROFILE2",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -625,7 +625,7 @@
         {
             "testCaseName":"TC011",
             "testCaseDescription": "FW version 6.0.0",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -662,7 +662,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"6.0.0"
                 },
                 "protocolVersion": "2.0.0",
@@ -689,7 +689,7 @@
         {
             "testCaseName":"TC012",
             "testCaseDescription": "FW version 7.0.0",
-            "include": false,
+            "include": true,
             "expectedResult":"pass",
             "jsonCmds": {
                 "apiKey": "key",
@@ -726,7 +726,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"7.0.0"
                 },
                 "protocolVersion": "2.0.0",
@@ -753,7 +753,7 @@
         {
             "testCaseName":"TC013",
             "testCaseDescription": "Current Control Mode 2",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -790,7 +790,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -817,7 +817,7 @@
         {
             "testCaseName":"TC014",
             "testCaseDescription": "Current Control Mode 3",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
@@ -854,7 +854,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"11.8.55"
                 },
                 "protocolVersion": "2.0.0",
@@ -881,7 +881,7 @@
         {
             "testCaseName":"TC015",
             "testCaseDescription": "FW version 12.0.0 and Build less than 3000",
-            "include": false,
+            "include": true,
             "expectedResult":"pass",
             "jsonCmds": {
                 "apiKey": "key",
@@ -918,7 +918,7 @@
                     "profile":"PROFILE1",
                     "sku":"16392",
                     "username":"$$OsAdmin",
-                    "uuid":null,
+                    "uuid":true,
                     "ver":"12.0.0"
                 },
                 "protocolVersion": "2.0.0",
@@ -945,13 +945,13 @@
         {
             "testCaseName":"TC016",
             "testCaseDescription": "non `activation` method sent to server as method",
-            "include": false,
+            "include": true,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
                 "appVersion": "1.0.0",
                 "message": "all's good!",
-                "method":"activation",
+                "method":"deactivation",
                 "payload":{
                     "build": "3001",
                     "certHashes":[
@@ -1007,7 +1007,7 @@
             }
         },
         {
-            "testCaseName":"TC016",
+            "testCaseName":"TC017",
             "testCaseDescription": "GUID is set to false and method set to deactivation",
             "include": true,
             "expectedResult":"fail",
