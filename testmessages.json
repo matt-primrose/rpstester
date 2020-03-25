@@ -1009,7 +1009,7 @@
         {
             "testCaseName":"TC017",
             "testCaseDescription": "GUID is set to false and method set to deactivation",
-            "include": true,
+            "include": false,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",

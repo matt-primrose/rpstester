@@ -33,6 +33,7 @@ let failedTests;
 let passedTests;
 let numTestPatterns;
 let failedTestCaseNames;
+let passingTestCaseNames;
 let expectedFailedTests;
 let expectedPassedTests;
 let maxWsConnections = 500;
@@ -47,7 +48,7 @@ function run(argv) {
     let args = parseArguments(argv);
     if ((typeof args.url) == 'string') { settings.url = args.url; }
     if ((typeof args.num) == 'string') { settings.num = parseInt(args.num); }
-    if ((typeof args.verbose) == 'string') { settings.verbose = (args.verbose.toLowerCase() == "true"); }
+    if ((typeof args.verbose) == 'string') { settings.verbose = parseInt(args.verbose); } else { settings.verbose = 0; }
     if ((args.url == undefined) || (args.num == undefined)){
         consoleHelp();
     }
@@ -70,7 +71,7 @@ function consoleHelp(){
     console.log('  rpstester --url [wss://server] --num [number]\r\n');
     console.log('  URL      - Server fqdn or IP:port of the RPS.');
     console.log('  NUM      - Number of connections to emulate.');
-    console.log('  VERBOSE  - Verbose logging to console.');
+    console.log('  VERBOSE  - Verbocity level: 0 = Status only, 1 = Critical messages, 2 = All messages');
     exit(1); return;
 }
 
@@ -81,6 +82,7 @@ function startTest(){
     completedTests = 0;
     failedTests = 0;
     failedTestCaseNames = new Array();
+    passingTestCaseNames = new Array();
     passedTests = 0;
     expectedFailedTests = 0;
     expectedPassedTests = 0;
@@ -93,7 +95,7 @@ function startTest(){
     wsmanHeader = testfile.wsmanTestMessages;
 
     // Create the test patterns to be run based on the test cases.
-    console.log('Generating Test Client Information...');
+    if (settings.verbose == 0) { console.log('Generating Test Client Information...'); }
     let activeTCs = new Array();
     for (let i in testfile.testCases){
         if (testfile.testCases[i].include == true) { activeTCs.push(i); }
@@ -110,7 +112,7 @@ function startTest(){
     numTestPatterns = (settings.num > emulatedClients.length ? emulatedClients.length : settings.num);
     // Evaluate test case information and predict pass/fail results
     predictResults(emulatedClients, settings.num);
-    console.log('Testing Data Generation Complete.  Starting tests...');
+    if (settings.verbose == 0) { console.log('Testing Data Generation Complete.  Starting tests...'); }
 
     // Launch the connection manager queue for executing tests
     connectionManagerQueue();
@@ -121,7 +123,8 @@ function connectionManagerQueue(){
     for (let x in emulatedClients){
         if (emulatedClients[x].index < (batchSize * connectionIndex)){
             if (emulatedClients[x].complete == false){
-                //console.log("Running Test Case: " + emulatedClients[x].testCaseName);
+                if (settings.verbose == 0) { console.log("Running Test Case: " + emulatedClients[x].testCaseName); }
+                if (settings.verbose == 1) { console.log("Starting client: " + x); }
                 connectionManagerEx(emulatedClients[x]);
             } 
         } else {
@@ -147,10 +150,6 @@ function connectionManagerEx(client){
         if (client.uuid == resp.uuid) { guidCheck = true; }
         testPass = (testPass && guidCheck);
         recordTestResults(testComplete, testPass, testCaseName, client.expectedResult);
-        // console.log("completedTests = " + completedTests + "\n\rrequestTests = " + requestedTests);
-        if (completedTests == requestedTests) {
-            processTestResults(requestedTests, passedTests, failedTests);
-        }
     });
 }
 
@@ -207,23 +206,23 @@ function connectToServer(message, callback){
     ws.on('open', function(){
         for (let x in emulatedClients){
             // Sends initial message from test client to server
-            if (message.jsonCmds.payload.uuid == emulatedClients[x].jsonCmds.payload.uuid){
+            if (message.jsonCmds.payload.uuid == emulatedClients[x].jsonCmds.payload.uuid && message.index == emulatedClients[x].index){
                 let ppcMessage = JSON.parse(JSON.stringify(message.jsonCmds));
-                if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-                if (settings.verbose) { console.log(ppcMessage); }
+                if (settings.verbose == 2) { console.log("---SENDING MESSAGE TO RPS---"); }
+                if (settings.verbose == 2) { console.log(ppcMessage); }
                 ppcMessage.payload = Buffer.from(JSON.stringify(ppcMessage.payload)).toString('base64');
                 ws.send(JSON.stringify(ppcMessage));
-                if (settings.verbose) { console.log("---MESSAGE SENT---"); }
+                if (settings.verbose == 2) { console.log("---MESSAGE SENT---"); }
                 emulatedClients[x].tunnel = ws;
                 emulatedClients[x].step = 0;
                 curWsConnections++;
-                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
+                if (settings.verbose == 0) { console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections); }
             }
         }
     });
     // Processes messages back from server
     ws.on('message', function(data){
-        if (settings.verbose) { console.log("---RECEIVED MESSAGE FROM RPS---"); }
+        if (settings.verbose == 2) { console.log("---RECEIVED MESSAGE FROM RPS---"); }
         let cmd = null;
         let payload = {};
         let uuid = null;
@@ -233,114 +232,93 @@ function connectToServer(message, callback){
         // Parse the message
         try {
             cmd = JSON.parse(data);
-            if (settings.verbose) { console.log("JSON Msg: \n\r" + JSON.stringify(cmd)); }
+            if (settings.verbose == 2) { console.log("JSON Msg: \n\r" + JSON.stringify(cmd)); }
         } catch(ex){
-            if (settings.verbose) { console.log('Unable to parse server response: ' + data); }
+            if (settings.verbose == 2) { console.log('Unable to parse server response: ' + data); }
         }
         if (typeof cmd != 'object') { 
-            if (settings.verbose) { console.log('Invalid server response: ' + cmd); }
+            if (settings.verbose == 2) { console.log('Invalid server response: ' + cmd); }
         }
         if (cmd.status !== 'ok') { 
             
         }
-        switch (cmd.method){
+        if (cmd.method == 'wsman'){
             // If message contains WSMAN message, parse and process
-            case 'wsman': {
-                // Decode payload from JSON message
-                let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
-                if (settings.verbose) { console.log("PAYLOAD Msg: \n\r" + JSON.stringify(pl)); }
-                if (settings.verbose) { console.log("---END OF MESSAGE---"); }
-                // Split payload up so we can extract important pieces
-                payload = pl.split("\r\n");
-                // Set flag for getting WSMAN
-                let xml = false;
-                // Create WSMAN temporary holder
-                let xmlHolder = new Array();
-                //Parse through Payload and extract important pieces
-                for (let x in payload){
-                    // Check for Authentication Header
-                    if (payload[x].substring(0,14) == "Authorization:"){ 
-                        authHeader = true; 
-                        if (settings.verbose) { console.log("authHeader: " + authHeader); }
-                    }
-                    // Grab the UUID for this message
-                    if (payload[x].substring(0,5) == "Host:"){ 
-                        uuid = payload[x].substring(6,42); 
-                        if (settings.verbose) { console.log("Host: " + uuid); }
-                    }
-                    // Find where WSMAN message begins and extract message parts
-                    if (payload[x].substring(0,5) == "<?xml"){ 
-                        xml = true; 
-                        if (settings.verbose) { console.log("XML Section Found"); }
-                    }
-                    // Put WSMAN message parts into array
-                    if (xml == true){ xmlHolder.push(payload[x]); }
+            // Decode payload from JSON message
+            let pl = Buffer.from(cmd.payload, 'base64').toString('utf8');
+            if (settings.verbose == 2) { console.log("PAYLOAD Msg: \n\r" + JSON.stringify(pl)); }
+            if (settings.verbose == 2) { console.log("---END OF MESSAGE---"); }
+            // Split payload up so we can extract important pieces
+            payload = pl.split("\r\n");
+            // Set flag for getting WSMAN
+            let xml = false;
+            // Create WSMAN temporary holder
+            let xmlHolder = new Array();
+            //Parse through Payload and extract important pieces
+            for (let x in payload){
+                // Check for Authentication Header
+                if (payload[x].substring(0,14) == "Authorization:"){ 
+                    authHeader = true; 
+                    if (settings.verbose == 2) { console.log("authHeader: " + authHeader); }
                 }
-                // Parse the full WSMAN message and turn into an Object
-                wsman = parseWsman(xmlHolder.join())
-                if (settings.verbose && xml) { console.log(wsman); }
+                // Grab the UUID for this message
+                if (payload[x].substring(0,5) == "Host:"){ 
+                    uuid = payload[x].substring(6,42); 
+                    if (settings.verbose == 2) { console.log("Host: " + uuid); }
+                }
+                // Find where WSMAN message begins and extract message parts
+                if (payload[x].substring(0,5) == "<?xml"){ 
+                    xml = true; 
+                    if (settings.verbose == 2) { console.log("XML Section Found"); }
+                }
+                // Put WSMAN message parts into array
+                if (xml == true){ xmlHolder.push(payload[x]); }
+            }
+            // Parse the full WSMAN message and turn into an Object
+            wsman = parseWsman(xmlHolder.join())
+            if (settings.verbose == 2 && xml) { console.log(wsman); }
+            for (let x in emulatedClients){
+                if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
+                    if (settings.verbose == 2) { console.log("authHeader: " + authHeader); }
+                    let step = determineWsmanStep(wsman, authHeader);
+                    if (settings.verbose == 1) { console.log("Sending this step to executeWsmanStage: " + step); }
+                    executeWsmanStage(step, emulatedClients[x]);
+                }
+            }
+        } else {
+            let key = cmd.message.substring(7,43);
+            if (!(key in emulatedClients)){
+                if (settings.verbose == 2) { console.log("Key not in list of clients"); }
                 for (let x in emulatedClients){
-                    if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
-                        if (settings.verbose) { console.log("authHeader: " + authHeader); }
-                        let step = determineWsmanStep(wsman, authHeader);
-                        if (settings.verbose) { console.log("Sending this step to executeWsmanStage: " + step); }
-                        executeWsmanStage(step, emulatedClients[x]);
+                    if (emulatedClients[x].jsonCmds.payload.uuid == false && emulatedClients[x].complete == false){
+                        if (settings.verbose == 2) { console.log("Identified UUID of device: " + x); }
+                        key = x;
                     }
                 }
-                break;
             }
-            // If message is a final success response, close connection and record results
-            case 'success': {
-                let key = cmd.message.substring(7,43);
-                emulatedClients[key].complete = true;
-                emulatedClients[key].tunnel.close();
-                let testCaseName = emulatedClients[key].testCaseName;
-                curWsConnections--;
-                if (connectionSlotAvailable()){
-                    if (settings.verbose) { console.log('running CMQ'); }
-                    connectionManagerQueue();
-                }
-                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
-                testResult = true;
-                callback(cmd, emulatedClients[key].complete, testResult, testCaseName);
-                break;
-            }
-            // If message is an error message, close connection and record results
-            case 'error': {
-                let key = cmd.message.substring(7,43);
-                if (!(key in emulatedClients)){
-                    for (let x in emulatedClients){
-                        if (emulatedClients[x].jsonCmds.payload.uuid == false){
-                            key = x;
-                            break;
-                        }
-                    }
-                }
-                emulatedClients[key].complete = true;
-                emulatedClients[key].tunnel.close();
-                let testCaseName = emulatedClients[key].testCaseName;
-                curWsConnections--;
-                if (connectionSlotAvailable()){
-                    if (settings.verbose) { console.log('running CMQ'); }
-                    connectionManagerQueue();
-                }
-                console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections);
-                testResult = false;
-                callback(cmd, emulatedClients[key].complete, testResult, testCaseName);
-                break;
-            }
-            // Catches any unknown messages.  Should never see this unless new message types are added
-            default: {
-                if (cmd.method) { 
-                    if (settings.verbose) { console.log('Unhandled server response, command: ' + data); }
-                }
-                break;
-            }
+            emulatedClients[key].complete = true;
+            emulatedClients[key].tunnel.close();
+            let testCaseName = emulatedClients[key].testCaseName;
+            if (cmd.method == 'success') { testResult = true; }
+            else if (cmd.method == 'error') { testResult = false; }
+            else { if (settings.verbose == 0) { console.log('Unhandled server response, command: ' + data); } }
+            callback(cmd, emulatedClients[key].complete, testResult, testCaseName);
         }
     });
     // Handles WebSocket errors
     ws.on('error', function(err){
-        console.log('Server error received: ' + err);
+        if (settings.verbose == 0) { console.log('Server error received: ' + err); }
+    });
+    ws.on('close', function(){
+        curWsConnections--;
+        if (settings.verbose == 0) { console.log('Connections: ' + curWsConnections + ' of ' + maxWsConnections); }
+        if (connectionSlotAvailable()){
+            if (settings.verbose == 1) { console.log('running CMQ'); }
+            connectionManagerQueue();
+        }
+        if (curWsConnections == 0) {
+            processTestResults(requestedTests, passedTests, failedTests);
+        }
     });
 }
 
@@ -350,15 +328,15 @@ function determineWsmanStep(wsmanObj, authHeader){
     if (authHeader == false){ stepVal = 0; }
     else {
         for (var x = 0; x < wsmanResourceUri.length; x++){
-            if (settings.verbose) { console.log("wsmanResourceURI: " + wsmanResourceUri[x] + "\n\rwsmanObj.ResourceURI: " + wsmanObj.Header.ResourceURI); }
+            if (settings.verbose == 2) { console.log("wsmanResourceURI: " + wsmanResourceUri[x] + "\n\rwsmanObj.ResourceURI: " + wsmanObj.Header.ResourceURI); }
             if (wsmanResourceUri[x] == wsmanObj.Header.ResourceURI){ resourceVal = x; break; }
         }
         for (var y = 0; y < wsmanAction.length; y++){
-            if (settings.verbose) { console.log("wsmanAction: " + wsmanAction[y] + "\n\rwsmanObj.Action: " + wsmanObj.Header.Action); }
+            if (settings.verbose == 2) { console.log("wsmanAction: " + wsmanAction[y] + "\n\rwsmanObj.Action: " + wsmanObj.Header.Action); }
             if (wsmanAction[y] == wsmanObj.Header.Action) { actionVal = y; break; }
         }
         stepVal = resourceVal + actionVal + 1;
-        if (settings.verbose) { console.log("Step Value: " + stepVal); }
+        if (settings.verbose == 1) { console.log("Step Value: " + stepVal); }
     }
     return stepVal;
 }
@@ -372,15 +350,15 @@ function executeWsmanStage(stage, client){
     client.step = stage;
     let returnValue = null;
     let wsmanMessage, header, combinedMessage, payloadB64, response;
-    if (settings.verbose) { console.log("Step " + client.step + " - Start"); }
+    if (settings.verbose == 1) { console.log("Step " + client.step + " - Start"); }
     client.wsmanCmds.hostBasedSetupServiceResponse.messageId++;
-    if (settings.verbose) { console.log("Message ID: " + generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId)); }
+    if (settings.verbose == 1) { console.log("Message ID: " + generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId)); }
     if (client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm == null) client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = generateDigestRealm();
-    if (settings.verbose) { console.log("Digest Realm: " + client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm); }
+    if (settings.verbose == 1) { console.log("Digest Realm: " + client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm); }
     if (client.step == 3) { returnValue = client.wsmanCmds.certInjectionResponse.returnValue; } 
     if (client.step == 4) { returnValue = client.wsmanCmds.adminSetupResponse.returnValue; }
     if (client.step == 5) { returnValue = client.wsmanCmds.setupResponse.returnValue; }
-    if (settings.verbose) { console.log("Return Value: " + returnValue); }
+    if (settings.verbose == 1) { console.log("Return Value: " + returnValue); }
     wsmanMessage = createWsmanMessage(client.step, generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
     let headerInfo = new Object();
     if (client.step == 0){
@@ -401,14 +379,14 @@ function executeWsmanStage(stage, client){
     headerInfo.server = wsmanHeader.header.server;
     header = createHeader(headerInfo.status, headerInfo.digestAuth, headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
     combinedMessage = header + wsmanMessage.wsman;
-    if (settings.verbose) { console.log("---SENDING MESSAGE TO RPS---"); }
-    if (settings.verbose) { console.log("WSMan Payload: \n\r" + combinedMessage); }
+    if (settings.verbose == 2) { console.log("---SENDING MESSAGE TO RPS---"); }
+    if (settings.verbose == 2) { console.log("WSMan Payload: \n\r" + combinedMessage); }
     payloadB64 = Buffer.from(combinedMessage).toString('base64');
     response = {"apiKey": client.jsonCmds.apiKey,"appVersion":client.jsonCmds.appVersion,"message":client.jsonCmds.message,"method":"response","payload":payloadB64,"protocolVersion":client.jsonCmds.protocolVersion,"status":client.jsonCmds.status};
-    if (settings.verbose) { console.log("Message: \n\r" + JSON.stringify(response)); }
+    if (settings.verbose == 2) { console.log("Message: \n\r" + JSON.stringify(response)); }
     client.tunnel.send(JSON.stringify(response));
-    if (settings.verbose) { console.log("---MESSAGE SENT---"); }
-    if (settings.verbose) { console.log("Step " + stage + " - End"); }
+    if (settings.verbose == 2) { console.log("---MESSAGE SENT---"); }
+    if (settings.verbose == 2) { console.log("Step " + stage + " - End"); }
 }
 
 // Generates the WSMAN body
@@ -564,6 +542,7 @@ function recordTestResults(testComplete, testPass, testCaseName, expectedResult)
     if (testPassCheck == true) {
         if (expectedResult == "pass") { passedTests++; } 
         else { failedTests++; }
+        if (!passingTestCaseNames.includes(testCaseName)) { passingTestCaseNames.push(testCaseName);}
     } else {
         if (testCaseName !== null) { failedTestCaseNames.push(testCaseName); }
         else { failedTestCaseNames.push("Missing TC Name"); }
@@ -588,6 +567,7 @@ function processTestResults(requestedTests, passedTests, failedTests){
     console.log(successfulResults,'Successful results:        ' + passedTests);
     console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
     console.log(unsuccessfulResults,'Unsuccessful results:      ' + failedTests);
+    console.log(white,'Pasing Test Cases:             ' + passingTestCaseNames.toString());
     console.log(white,'Failing Test Cases:             ' + failedTestCaseNames.toString());
 }
 
