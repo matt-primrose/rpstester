@@ -36,9 +36,9 @@ let failedTestCaseNames;
 let passingTestCaseNames;
 let expectedFailedTests;
 let expectedPassedTests;
-let maxWsConnections = 500;
+let maxWsConnections = 5000;
 let curWsConnections = 0;
-let batchSize = 500;
+let batchSize = 5000;
 let connectionIndex = 1;
 let wsmanHeader;
 
