@@ -567,7 +567,7 @@ function processTestResults(requestedTests, passedTests, failedTests){
     console.log(successfulResults,'Successful results:        ' + passedTests);
     console.log(white,'Expected unsuccessful:     ' + expectedFailedTests);
     console.log(unsuccessfulResults,'Unsuccessful results:      ' + failedTests);
-    console.log(white,'Pasing Test Cases:             ' + passingTestCaseNames.toString());
+    console.log(white,'Passing Test Cases:             ' + passingTestCaseNames.toString());
     console.log(white,'Failing Test Cases:             ' + failedTestCaseNames.toString());
 }
 
