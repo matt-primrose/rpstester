@@ -36,9 +36,9 @@ let failedTestCaseNames;
 let passingTestCaseNames;
 let expectedFailedTests;
 let expectedPassedTests;
-let maxWsConnections = 5000;
+let maxWsConnections = 500;
 let curWsConnections = 0;
-let batchSize = 5000;
+let batchSize = 500;
 let connectionIndex = 1;
 let wsmanHeader;
 
@@ -49,6 +49,7 @@ function run(argv) {
     if ((typeof args.url) == 'string') { settings.url = args.url; }
     if ((typeof args.num) == 'string') { settings.num = parseInt(args.num); }
     if ((typeof args.verbose) == 'string') { settings.verbose = parseInt(args.verbose); } else { settings.verbose = 0; }
+    if ((typeof args.batchsize) == 'string') { settings.batchSize = parseInt(args.batchsize); }
     if ((args.url == undefined) || (args.num == undefined)){
         consoleHelp();
     }
@@ -68,10 +69,11 @@ function consoleHelp(){
     oamtct();
     console.log('RPS Scale Tester ver. ' + rpsTesterVersion);
     console.log('No action specified, use rpstester like this:\r\n');
-    console.log('  rpstester --url [wss://server] --num [number]\r\n');
-    console.log('  URL      - Server fqdn or IP:port of the RPS.');
-    console.log('  NUM      - Number of connections to emulate.');
-    console.log('  VERBOSE  - Verbocity level: 0 = Status only, 1 = Critical messages, 2 = All messages');
+    console.log('  rpstester --url [wss://server] --num [number] --verbose [number] --batchsize [number]\r\n');
+    console.log('  URL        - Server fqdn or IP:port of the RPS.');
+    console.log('  NUM        - Number of connections to emulate.');
+    console.log('  VERBOSE    - (optional) Verbocity level: 0 = Status only, 1 = Critical messages, 2 = All messages.  Default is 0.');
+    console.log('  BATCHSIZE  - (optional) Number of simultaneous connections to the server.  Default is 500.');
     exit(1); return;
 }
 
@@ -86,6 +88,7 @@ function startTest(){
     passedTests = 0;
     expectedFailedTests = 0;
     expectedPassedTests = 0;
+    if (settings.batchSize) { batchSize = settings.batchSize; maxWsConnections = settings.batchSize; }
 
     // Load test cases from testmessages.json file
     requestedTests = settings.num;
