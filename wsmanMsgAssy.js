@@ -1,7 +1,7 @@
 'use strict'
-const wsmanMessages = new Object();
+const WsmanMessageAssember = new Object();
 // Generates the WSMAN header
-wsmanMessages.createWsmanHeader = function(status, auth, digestRealm, nonce, contentType, server, contentLength, connection, xFrame, encoding){
+WsmanMessageAssember.createWsmanHeader = function(status, auth, digestRealm, nonce, contentType, server, contentLength, connection, xFrame, encoding){
     let header = null;
     if (status !== null) { header = status + "\r\n";}
     if (auth !== null && digestRealm !== null && nonce !== null) { header  += auth.auth + 'Digest realm="' + digestRealm + '", ' + auth.nonce + '"' + nonce + '", ' + auth.stale + '"false", ' + auth.qop + '"auth"\r\n'; }
@@ -15,7 +15,7 @@ wsmanMessages.createWsmanHeader = function(status, auth, digestRealm, nonce, con
 }
 
     // Generates the WSMAN body
-wsmanMessages.createWsmanMessage = function(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
+WsmanMessageAssember.createWsmanMessage = function(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
     let message = {}
     switch (messageType){
         case 0:
@@ -57,7 +57,7 @@ wsmanMessages.createWsmanMessage = function(messageType, messageId, digestRealm,
     return message;
 }
 
-module.exports = wsmanMessages;
+module.exports = WsmanMessageAssember;
 
 function setMessageArgs(message, arg1, arg2, arg3, arg4, arg5, arg6){
     const WsManMessages = {
