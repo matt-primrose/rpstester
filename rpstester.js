@@ -25,6 +25,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const parseWsman = require('./amt-xml').ParseWsman;
 const wsmanMessages = require('./wsmanMessages');
+const utils = require('./utils');
 const rpsTesterVersion = '0.0.1';
 const settings = new Object();
 let emulatedClients;
@@ -179,17 +180,17 @@ function generateTestClientInformation(testMessage, index, callback){
         message.jsonCmds.payload.client = testMessage.jsonCmds.payload.client;
         message.jsonCmds.payload.currentMode = testMessage.jsonCmds.payload.currentMode;
         message.jsonCmds.payload.fqdn = testMessage.jsonCmds.payload.fqdn;
-        message.jsonCmds.payload.password = generateOSAdminPassword();
+        message.jsonCmds.payload.password = utils.generateOSAdminPassword();
         message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
         message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
         message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
-        if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = generateUuid(); } else { message.jsonCmds.payload.uuid = testMessage.jsonCmds.payload.uuid; }
+        if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = utils.generateUuid(); } else { message.jsonCmds.payload.uuid = testMessage.jsonCmds.payload.uuid; }
         message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
         message.wsmanCmds = new Object();
         message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
         message.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes = testMessage.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes;
         message.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus = testMessage.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus;
-        message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = generateNonce(20);
+        message.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce = utils.generateNonce(20);
         message.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode = testMessage.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode;
         message.wsmanCmds.hostBasedSetupServiceResponse.messageId = 0;
         message.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = null;
@@ -199,7 +200,7 @@ function generateTestClientInformation(testMessage, index, callback){
         message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
         message.wsmanCmds.setupResponse = new Object();
         message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
-        callback(getUUID((message.jsonCmds.payload.uuid ? message.jsonCmds.payload.uuid : generateUuid())), message);
+        callback(utils.getUUID((message.jsonCmds.payload.uuid ? message.jsonCmds.payload.uuid : utils.generateUuid())), message);
     }
 }
 
@@ -282,7 +283,7 @@ function connectToServer(message, callback){
             wsman = parseWsman(xmlHolder.join())
             if (settings.verbose == 2 && xml) { console.log(wsman); }
             for (let x in emulatedClients){
-                if (uuid == getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
+                if (uuid == utils.getUUID(emulatedClients[x].jsonCmds.payload.uuid)){
                     if (settings.verbose == 2) { console.log("authHeader: " + authHeader); }
                     let step = determineWsmanStep(wsman, authHeader);
                     if (settings.verbose == 1) { console.log("Sending this step to executeWsmanStage: " + step); }
@@ -356,14 +357,14 @@ function executeWsmanStage(stage, client){
     let wsmanMessage, header, combinedMessage, payloadB64, response;
     if (settings.verbose == 1) { console.log("Step " + client.step + " - Start"); }
     client.wsmanCmds.hostBasedSetupServiceResponse.messageId++;
-    if (settings.verbose == 1) { console.log("Message ID: " + generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId)); }
-    if (client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm == null) client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = generateDigestRealm();
+    if (settings.verbose == 1) { console.log("Message ID: " + utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId)); }
+    if (client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm == null) client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm = utils.generateDigestRealm();
     if (settings.verbose == 1) { console.log("Digest Realm: " + client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm); }
     if (client.step == 3) { returnValue = client.wsmanCmds.certInjectionResponse.returnValue; } 
     if (client.step == 4) { returnValue = client.wsmanCmds.adminSetupResponse.returnValue; }
     if (client.step == 5) { returnValue = client.wsmanCmds.setupResponse.returnValue; }
     if (settings.verbose == 1) { console.log("Return Value: " + returnValue); }
-    wsmanMessage = wsmanMessages.createWsmanMessage(client.step, generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
+    wsmanMessage = wsmanMessages.createWsmanMessage(client.step, utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
     // wsmanMessage = createWsmanMessage(client.step, generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
     let headerInfo = new Object();
     if (client.step == 0){
@@ -382,7 +383,7 @@ function executeWsmanStage(stage, client){
         headerInfo.encoding = wsmanHeader.header.encoding;
     }
     headerInfo.server = wsmanHeader.header.server;
-    header = wsmanMessages.createWsmanHeader(headerInfo.status, headerInfo.digestAuth, generateDigestRealm(), generateNonce(16), headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
+    header = wsmanMessages.createWsmanHeader(headerInfo.status, headerInfo.digestAuth, utils.generateDigestRealm(), utils.generateNonce(16), headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
     combinedMessage = header + wsmanMessage.wsman;
     if (settings.verbose == 2) { console.log("---SENDING MESSAGE TO RPS---"); }
     if (settings.verbose == 2) { console.log("WSMan Payload: \n\r" + combinedMessage); }
@@ -392,96 +393,6 @@ function executeWsmanStage(stage, client){
     client.tunnel.send(JSON.stringify(response));
     if (settings.verbose == 2) { console.log("---MESSAGE SENT---"); }
     if (settings.verbose == 2) { console.log("Step " + stage + " - End"); }
-}
-
-
-// Creates a nonce for a given length
-function generateNonce(length){
-    let nonce = crypto.randomBytes(length).toString('hex'); 
-    return nonce;
-}
-
-// Creates a UUID
-function generateUuid(){
-    const uuidv4 = require('uuid').v4;
-    let buf = new Array();
-    let amtUuid = uuidv4(null, buf);
-    return amtUuid;
-}
-
-// Parses a UUID from a Byte Array
-function getUUID(uuid) {
-    if (uuid == false) { return false; }
-    uuid = Buffer.from(uuid);
-    let guid = [
-      zeroLeftPad(uuid.readUInt32LE(0).toString(16), 8),
-      zeroLeftPad(uuid.readUInt16LE(4).toString(16), 4),
-      zeroLeftPad(uuid.readUInt16LE(6).toString(16), 4),
-      zeroLeftPad(uuid.readUInt16BE(8).toString(16), 4),
-      zeroLeftPad(uuid.slice(10).toString("hex").toLowerCase(), 12)].join("-");
-
-    return guid;
-}
-
-// Helper function for getUUID
-function zeroLeftPad(str, len) {
-    if (len == null && typeof len != "number") {
-        return null;
-    }
-    if (str == null) str = ""; // If null, this is to generate zero leftpad string
-    let zlp = "";
-    for (var i = 0; i < len - str.length; i++) {
-        zlp += "0";
-    }
-    return zlp + str;
-}
-
-// Returns the formatted MessageID for WSMAN messages
-function generateMessageId(previousMessageId){
-    let messageId = "00000000-8086-8086-8086-00000000000" + previousMessageId.toString()
-    return messageId;
-}
-
-// Creates the Digest Realm needed for AMT Activation
-function generateDigestRealm(){
-    let digestRealm = null;
-    digestRealm = 'Digest:'+getRandomHex(4)+'0000000000000000000000000000';
-    return digestRealm;
-}
-
-// Creates a random hex value of a given length
-function getRandomHex(length){
-    let num;
-    for (var x = 0; x < length; x++){
-        if (x === 0) { num = Math.floor(Math.random() * 15).toString(16); }
-        else { num += Math.floor(Math.random() * 15).toString(16); }
-    }
-    return num;
-}
-
-// Creates a random OSAdmin password
-function generateOSAdminPassword(){
-    let length = 32;
-    let password = '';
-    let validChars = "abcdefghijklmnopqrstuvwxyz";
-    let validNums = "0123456789";
-    let validSpec = "!@#$%^&*()_-+=?.>,<";
-    let numLen = Math.floor(Math.random() * length/3) + 1;
-    let specLen = Math.floor(Math.random() * length/3) + 1;
-    let charLen = length-numLen-specLen;
-    for (let x = 0; x < charLen; x++){
-        let upper = Math.random() >= 0.5;
-        if (upper == true){ password += validChars.charAt(Math.floor(Math.random() * validChars.length)).toUpperCase(); }
-        else { password += validChars.charAt(Math.floor(Math.random() * validChars.length)); }
-    }
-    for (let x = 0; x < specLen; x++){
-        password += validSpec.charAt(Math.floor(Math.random() * validSpec.length));
-    }
-    for (let x = 0; x < numLen; x++){
-        password += validNums.charAt(Math.floor(Math.random() * validNums.length));
-        password = password.split('').sort(function(){ return 0.5 - Math.random() }).join('');
-    }
-    return password;
 }
 
 // Records the test results when a test case completes
