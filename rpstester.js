@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2019 Intel Corporation
+Copyright 2018-2020 Intel Corporation
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 /** 
 * @description A scale tester for RPS.
 * @author Matt Primrose
-* @version v0.0.1
+* @version v0.1.1
 */
 
 'use strict';
@@ -28,19 +28,13 @@ const wem = require('./wsmanExecMgr');
 const utils = require('./utils');
 const client = require('./clientClass');
 const resultsMgr = require('./testResultMgr');
-const rpsTesterVersion = '0.0.1';
+const rpsTesterVersion = '0.1.1';
 const settings = new Object();
 let emulatedClients;
 let testResultMgr;
-let completedTests;
 let requestedTests;
 let failedTests;
 let passedTests;
-let numTestPatterns;
-let failedTestCaseNames;
-let passingTestCaseNames;
-let expectedFailedTests;
-let expectedPassedTests;
 let maxWsConnections = 500;
 let curWsConnections = 0;
 let batchSize = 500;
