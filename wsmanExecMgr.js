@@ -1,9 +1,10 @@
 'use strict'
-const wma = require('./wsmanMsgAssy');
+const wsmanMsgAssy = require('./wsmanMsgAssy');
 const utils = require('./utils');
 // Arrays for holding the WSMAN ResourceURI and Action strings for determining the current request from the server
 const wsmanResourceUri = ['http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService',]
 const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup'];
+
 class WsmanExecMgr {
     constructor(settings, wsmanHeader) {
         this.settings = settings;
@@ -42,7 +43,8 @@ class WsmanExecMgr {
         if (client.step == 4) { returnValue = client.wsmanCmds.adminSetupResponse.returnValue; }
         if (client.step == 5) { returnValue = client.wsmanCmds.setupResponse.returnValue; }
         if (this.settings.verbose == 1) { console.log("Return Value: " + returnValue); }
-        wsmanMessage = wma.createWsmanMessage(client.step, utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
+        let msgAssy = new wsmanMsgAssy(this.settings);
+        wsmanMessage = msgAssy.createWsmanMessage(client.step, utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
         let headerInfo = new Object();
         if (client.step == 0){
             headerInfo.status = this.wsmanHeader.header.status.unauthorized;
@@ -60,7 +62,7 @@ class WsmanExecMgr {
             headerInfo.encoding = this.wsmanHeader.header.encoding;
         }
         headerInfo.server = this.wsmanHeader.header.server;
-        header = wma.createWsmanHeader(headerInfo.status, headerInfo.digestAuth, utils.generateDigestRealm(), utils.generateNonce(16), headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
+        header = msgAssy.createWsmanHeader(headerInfo.status, headerInfo.digestAuth, utils.generateDigestRealm(), utils.generateNonce(16), headerInfo.contentType, headerInfo.server, wsmanMessage.length, headerInfo.connection, headerInfo.xFrameOptions, headerInfo.encoding);
         combinedMessage = header + wsmanMessage.wsman;
         if (this.settings.verbose == 2) { console.log("---SENDING MESSAGE TO RPS---"); }
         if (this.settings.verbose == 2) { console.log("WSMan Payload: \n\r" + combinedMessage); }

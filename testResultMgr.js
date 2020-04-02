@@ -1,0 +1,63 @@
+'use strict'
+
+class TestResultMgr{
+    constructor(settings, numTestCases){
+        this.settings = settings;
+        this.completedTests = 0;
+        this.failedTests = 0;
+        this.failedTestCaseNames = new Array();
+        this.passingTestCaseNames = new Array();
+        this.passedTests = 0;
+        this.expectedFailedTests = 0;
+        this.expectedPassedTests = 0;
+        this.numTestPatterns = (settings.num > numTestCases ? numTestCases : settings.num);
+        this.requestedTests = settings.num;
+    }
+    
+    recordTestResults(testComplete, testPass, testCaseName, expectedResult){
+        let expectedResultBool = (expectedResult == "pass" ? true : false);
+        let testPassCheck = (expectedResultBool == testPass);
+        if (testComplete == true) { this.completedTests++ ;}
+        if (testPassCheck == true) {
+            if (expectedResult == "pass") { this.passedTests++; } 
+            else { this.failedTests++; }
+            if (!this.passingTestCaseNames.includes(testCaseName)) { this.passingTestCaseNames.push(testCaseName);}
+        } else {
+            if (testCaseName !== null) { this.failedTestCaseNames.push(testCaseName); }
+            else { this.failedTestCaseNames.push("Missing TC Name"); }
+        }
+    }
+    processTestResults(){
+        let red = "\x1b[31m";
+        let white = "\x1b[37m";
+        let green = "\x1b[32m";
+        let result;
+        let successfulResults;
+        let unsuccessfulResults;
+        if (this.expectedPassedTests == this.passedTests) { successfulResults = green;} else { successfulResults = red;}
+        if (this.expectedFailedTests == this.failedTests) { unsuccessfulResults = green;} else { unsuccessfulResults = red;}
+        if ((successfulResults == green) && (unsuccessfulResults == green)) { result = green; } else { result = red; };
+        console.log(result,"Test run complete!");
+        console.log(white,'Test Configurations Run:   ' + this.numTestPatterns);
+        console.log(white,'Tests requested:           ' + this.requestedTests);
+        console.log(white,'Expected successful:       ' + this.expectedPassedTests);
+        console.log(successfulResults,'Successful results:        ' + this.passedTests);
+        console.log(white,'Expected unsuccessful:     ' + this.expectedFailedTests);
+        console.log(unsuccessfulResults,'Unsuccessful results:      ' + this.failedTests);
+        console.log(white,'Passing Test Cases:             ' + this.passingTestCaseNames.toString());
+        console.log(white,'Failing Test Cases:             ' + this.failedTestCaseNames.toString());
+    }
+    predictResults(clients, iterations){
+        let y = 0;
+        while (y < iterations){
+            for (let x in clients){
+                if (clients[x].expectedResult == 'pass') { this.expectedPassedTests++; }
+                if (clients[x].expectedResult == 'fail') { this.expectedFailedTests++; }
+                y++;
+                if (y == iterations) { break; }
+            }
+        }
+    }
+}
+
+module.exports = TestResultMgr;
