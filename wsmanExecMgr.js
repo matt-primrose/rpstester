@@ -20,13 +20,25 @@ const utils = require('./utils');
 const wsmanResourceUri = ['http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService',]
 const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup'];
 
+/**
+ * @description WSMAN Execution Manager Class
+ */
 class WsmanExecMgr {
+    /**
+     * @description Constructor for WSMAN Execution Manager Class
+     * @param {Object} settings 
+     * @param {Object} wsmanHeader 
+     */
     constructor(settings, wsmanHeader) {
         this.settings = settings;
         this.wsmanHeader = wsmanHeader;
     }
-    // Parses the WSMAN object and determines where in the activation flow the emulated client is currently
-    determineWsmanStep = function(wsmanObj, authHeader){
+    /**
+     * @description Parses the WSMAN object and determines where in the activation flow the emulated client is currently
+     * @param {Object} wsmanObj 
+     * @param {Boolean} authHeader 
+     */
+    determineWsmanStep(wsmanObj, authHeader){
         let stepVal, resourceVal, actionVal;
         if (authHeader == false){ stepVal = 0; }
         else {
@@ -43,9 +55,12 @@ class WsmanExecMgr {
         }
         return stepVal;
     }
-
-    // Manages each the response at each WSMAN step
-    executeWsmanStage = function(stage, client){
+    /**
+     * @description Manages each the response at each WSMAN step
+     * @param {Number} stage 
+     * @param {Object} client 
+     */
+    executeWsmanStage(stage, client){
         client.step = stage;
         let returnValue = null;
         let wsmanMessage, header, combinedMessage, payloadB64, response;

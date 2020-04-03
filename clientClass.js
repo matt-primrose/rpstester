@@ -19,6 +19,7 @@ class Client{
     constructor(settings){
         this.settings = settings;
     }
+    // Creates a test case client to emulate PPC interaction
     createClient(testMessage, index, callback){
         if (testMessage.include) {
             let message = new Object();

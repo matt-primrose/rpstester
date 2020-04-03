@@ -18,20 +18,30 @@ const crypto = require('crypto');
 const uuidv4 = require('uuid').v4;
 const Utils = new Object();
 
-// Creates a nonce for a given length
+/**
+ * @description Creates a nonce for a given length
+ * @param {Number} length
+ */
 Utils.generateNonce = function(length){
     let nonce = crypto.randomBytes(length).toString('hex'); 
     return nonce;
 }
 
-// Creates a UUID
+/**
+ * @description Creates a UUID
+ * @returns {ByteArray}
+ */
 Utils.generateUuid = function(){
     let buf = new Array();
     let amtUuid = uuidv4(null, buf);
     return amtUuid;
 }
 
-// Parses a UUID from a Byte Array
+/**
+ * @description Parses a UUID from a Byte Array
+ * @param {ByteArray} uuid
+ * @returns {String}
+ */
 Utils.getUUID = function(uuid) {
     if (uuid == false) { return false; }
     uuid = Buffer.from(uuid);
@@ -45,20 +55,29 @@ Utils.getUUID = function(uuid) {
     return guid;
 }
 
-// Returns the formatted MessageID for WSMAN messages
+/**
+ * @description Returns the formatted MessageID for WSMAN messages
+ * @returns {String}
+ */
 Utils.generateMessageId = function(previousMessageId){
     let messageId = "00000000-8086-8086-8086-00000000000" + previousMessageId.toString()
     return messageId;
 }
 
-// Creates the Digest Realm needed for AMT Activation
+/**
+ * @description Creates the Digest Realm needed for AMT Activation
+ * @returns {String}
+ */
 Utils.generateDigestRealm = function(){
     let digestRealm = null;
     digestRealm = 'Digest:'+getRandomHex(4)+'0000000000000000000000000000';
     return digestRealm;
 }
 
-// Creates a random OSAdmin password
+/**
+ * @description Creates a random OSAdmin password
+ * @returns {String}
+ */
 Utils.generateOSAdminPassword = function(){
     let length = 32;
     let password = '';

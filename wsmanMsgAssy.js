@@ -14,11 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 'use strict'
-class WsmanMessageAssember{
+/**
+ * @description WSMAN Message Assembler Class
+ */
+class WsmanMessageAssembler{
+    /**
+     * @description Constructor for WSMAN Message Assembler Class
+     * @param {Object} settings 
+     */
     constructor(settings){
         this.settings = settings;
     }
-    // Generates the WSMAN header
+    /**
+     * @description Generates the WSMAN header
+     * @param {String} status 
+     * @param {Object} auth 
+     * @param {String} digestRealm 
+     * @param {String} nonce 
+     * @param {String} contentType 
+     * @param {String} server 
+     * @param {Number} contentLength 
+     * @param {String} connection 
+     * @param {String} xFrame 
+     * @param {String} encoding 
+     * @returns {String}
+     */
     createWsmanHeader(status, auth, digestRealm, nonce, contentType, server, contentLength, connection, xFrame, encoding){
         let header = null;
         if (status !== null) { header = status + "\r\n";}
@@ -31,8 +51,18 @@ class WsmanMessageAssember{
         if (encoding !== null) { header  += 'Transfer-Encoding: ' + encoding + '\r\n\r\n'; }
         return header;
     }
-
-    // Generates the WSMAN body
+    /**
+     * @description Generates the WSMAN body
+     * @param {Number} messageType 
+     * @param {String} messageId 
+     * @param {String} digestRealm 
+     * @param {Number} currentControlMode 
+     * @param {Array} allowedControlModes 
+     * @param {Number} certChainStatus 
+     * @param {String} configurationNonce 
+     * @param {Number} returnValue 
+     * @returns {String}
+     */
     createWsmanMessage(messageType, messageId, digestRealm, currentControlMode, allowedControlModes, certChainStatus, configurationNonce, returnValue){
         let message = {}
         switch (messageType){
@@ -62,8 +92,9 @@ class WsmanMessageAssember{
     }
 }
 
-module.exports = WsmanMessageAssember;
+module.exports = WsmanMessageAssembler;
 
+// Injects variables into WSMAN response messages
 function setMessageArgs(message, arg1, arg2, arg3, arg4, arg5, arg6){
     const WsManMessages = {
         "Unauthorized":`<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" >\n<html><head><link rel=stylesheet href=/styles.css>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n<title>Intel&reg; Active Management Technology</title></head>\n<body>\n<table class=header>\n<tr><td valign=top nowrap>\n<p class=top1>Intel<font class=r><sup>&reg;</sup></font> Active Management Technology\n<td valign="top"><img src="logo.gif" align="right" alt="Intel">\n</table>\n<br />\n<h2 class=warn>Log on failed. Incorrect user name or password, or user account temporarily locked.</h2>\n\n<p>\n<form METHOD="GET" action="index.htm"><h2><input type=submit value="Try again">\n</h2></form>\n<p>\n\n</body>\n</html>\n`,

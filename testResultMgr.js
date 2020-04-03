@@ -15,7 +15,15 @@ limitations under the License.
 */
 'use strict'
 
+/**
+ * @description Class to manage test result collection and reporting
+ */
 class TestResultMgr{
+    /**
+     * @description TestResultMgr Constructor
+     * @param {Object} settings Settings passed in via command line arguments
+     * @param {Number} numTestCases Number of test cases being run
+     */
     constructor(settings, numTestCases){
         this.settings = settings;
         this.completedTests = 0;
@@ -28,7 +36,13 @@ class TestResultMgr{
         this.numTestPatterns = (settings.num > numTestCases ? numTestCases : settings.num);
         this.requestedTests = settings.num;
     }
-    
+    /**
+     * @description Records a test case result
+     * @param {Boolean} testComplete
+     * @param {Boolean} testPass 
+     * @param {String} testCaseName 
+     * @param {String} expectedResult 
+     */
     recordTestResults(testComplete, testPass, testCaseName, expectedResult){
         let expectedResultBool = (expectedResult == "pass" ? true : false);
         let testPassCheck = (expectedResultBool == testPass);
@@ -42,6 +56,9 @@ class TestResultMgr{
             else { this.failedTestCaseNames.push("Missing TC Name"); }
         }
     }
+    /**
+     * @description Processes the test run results and prints to console
+     */
     processTestResults(){
         let red = "\x1b[31m";
         let white = "\x1b[37m";
@@ -62,6 +79,11 @@ class TestResultMgr{
         console.log(white,'Passing Test Cases:             ' + this.passingTestCaseNames.toString());
         console.log(white,'Failing Test Cases:             ' + this.failedTestCaseNames.toString());
     }
+    /**
+     * @description Predicts the test results based on test case information
+     * @param {Object} clients 
+     * @param {Number} iterations 
+     */
     predictResults(clients, iterations){
         let y = 0;
         while (y < iterations){
