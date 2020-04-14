@@ -18,7 +18,7 @@ const wsmanMsgAssy = require('./wsmanMsgAssy');
 const utils = require('./utils');
 // Arrays for holding the WSMAN ResourceURI and Action strings for determining the current request from the server
 const wsmanResourceUri = ['http://intel.com/wbem/wscim/1/amt-schema/1/AMT_GeneralSettings','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService','http://intel.com/wbem/wscim/1/amt-schema/1/AMT_SetupAndConfigurationService'];
-const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup','http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse','http://intel.com/wbem/wscim/1/amt-schema/1/AMT_SetupAndConfigurationService/UnprovisionResponse'];
+const wsmanAction = ['http://schemas.xmlsoap.org/ws/2004/09/transfer/Get','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AddNextCertInChain','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/AdminSetup','http://intel.com/wbem/wscim/1/ips-schema/1/IPS_HostBasedSetupService/Setup', 'http://intel.com/wbem/wscim/1/amt-schema/1/AMT_SetupAndConfigurationService/Unprovision'];
 
 /**
  * @description WSMAN Execution Manager Class
@@ -50,7 +50,7 @@ class WsmanExecMgr {
                 if (this.settings.verbose == 2) { console.log("wsmanAction: " + wsmanAction[y] + "\n\rwsmanObj.Action: " + wsmanObj.Header.Action); }
                 if (wsmanAction[y] == wsmanObj.Header.Action) { actionVal = y; break; }
             }
-            stepVal = resourceVal + actionVal + 1;
+            stepVal = getStepValue(resourceVal, actionVal);
             if (this.settings.verbose == 1) { console.log("Step Value: " + stepVal); }
         }
         return stepVal;
@@ -107,3 +107,15 @@ class WsmanExecMgr {
 }
 
 module.exports = WsmanExecMgr;
+
+function getStepValue(rVal, aVal){
+    let sVal = null;
+    if (rVal == 0 && aVal == 0) { sVal = 1; }
+    if (rVal == 1 && aVal == 0) { sVal = 2; }
+    if (rVal == 1 && aVal == 1) { sVal = 3; }
+    if (rVal == 1 && aVal == 2) { sVal = 4; }
+    if (rVal == 1 && aVal == 3) { sVal = 5; }
+    if (rVal == 2 && aVal == 0) { sVal = 6; }
+    if (rVal == 2 && aVal == 4) { sVal = 7; }
+    return sVal;
+}

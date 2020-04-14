@@ -196,6 +196,7 @@ class TestManager{
                         let wsmanExecMgr = new wem(settings, wsmanHeader);
                         if (settings.verbose == 2) { console.log("authHeader: " + authHeader); }
                         let step = wsmanExecMgr.determineWsmanStep(wsman, authHeader);
+                        if (step == null) { if(settings.verbose == 0) { console.log("DEBUG: Encountered unsupported WSMAN command calls!"); } }
                         if (settings.verbose == 1) { console.log("Sending this step to executeWsmanStage: " + step); }
                         wsmanExecMgr.executeWsmanStage(step, emulatedClients[x]);
                     }
