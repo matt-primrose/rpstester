@@ -75,7 +75,7 @@ class WsmanExecMgr {
         if (client.step == 7) { returnValue = client.wsmanCmds.deactivateResponse.returnValue; }
         if (this.settings.verbose == 1) { console.log("Return Value: " + returnValue); }
         let msgAssy = new wsmanMsgAssy(this.settings);
-        wsmanMessage = msgAssy.createWsmanMessage(client.step, utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue);
+        wsmanMessage = msgAssy.createWsmanMessage(client.step, utils.generateMessageId(client.wsmanCmds.hostBasedSetupServiceResponse.messageId), client.wsmanCmds.hostBasedSetupServiceResponse.digestRealm, client.wsmanCmds.hostBasedSetupServiceResponse.currentControlMode, client.wsmanCmds.hostBasedSetupServiceResponse.allowedControlModes, client.wsmanCmds.hostBasedSetupServiceResponse.certChainStatus, client.wsmanCmds.hostBasedSetupServiceResponse.configurationNonce, returnValue, client.wsmanCmds.setupAndConfigurationServiceResponse.provisioningMode, client.wsmanCmds.setupAndConfigurationServiceResponse.provisioningState);
         let headerInfo = new Object();
         if (client.step == 0){
             headerInfo.status = this.wsmanHeader.header.status.unauthorized;

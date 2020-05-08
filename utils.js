@@ -31,9 +31,10 @@ Utils.generateNonce = function(length){
  * @description Creates a UUID
  * @returns {ByteArray}
  */
-Utils.generateUuid = function(){
+Utils.generateUuid = function(value){
+    if (value == undefined) { value = null; }
     let buf = new Array();
-    let amtUuid = uuidv4(null, buf);
+    let amtUuid = uuidv4(value, buf);
     return amtUuid;
 }
 

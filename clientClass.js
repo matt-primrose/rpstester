@@ -45,7 +45,7 @@ class Client{
             message.jsonCmds.payload.profile = testMessage.jsonCmds.payload.profile;
             message.jsonCmds.payload.sku = testMessage.jsonCmds.payload.sku;
             message.jsonCmds.payload.username = testMessage.jsonCmds.payload.username;
-            if (testMessage.jsonCmds.payload.uuid) { message.jsonCmds.payload.uuid = utils.generateUuid(); } else { message.jsonCmds.payload.uuid = testMessage.jsonCmds.payload.uuid; }
+            if (testMessage.jsonCmds.payload.uuid === true) { message.jsonCmds.payload.uuid = utils.generateUuid(); } else { message.jsonCmds.payload.uuid = utils.generateUuid(testMessage.jsonCmds.payload.uuid); }
             message.jsonCmds.payload.ver = testMessage.jsonCmds.payload.ver;
             message.wsmanCmds = new Object();
             message.wsmanCmds.hostBasedSetupServiceResponse = new Object();
@@ -61,6 +61,11 @@ class Client{
             message.wsmanCmds.adminSetupResponse.returnValue = testMessage.wsmanCmds.adminSetupResponse.returnValue;
             message.wsmanCmds.setupResponse = new Object();
             message.wsmanCmds.setupResponse.returnValue = testMessage.wsmanCmds.setupResponse.returnValue;
+            message.wsmanCmds.setupAndConfigurationServiceResponse = new Object();
+            message.wsmanCmds.setupAndConfigurationServiceResponse.provisioningMode = testMessage.wsmanCmds.setupAndConfigurationServiceResponse.provisioningMode;
+            message.wsmanCmds.setupAndConfigurationServiceResponse.provisioningState = testMessage.wsmanCmds.setupAndConfigurationServiceResponse.provisioningState;
+            message.wsmanCmds.deactivateResponse = new Object();
+            message.wsmanCmds.deactivateResponse.returnValue = testMessage.wsmanCmds.deactivateResponse.returnValue;
             callback(utils.getUUID((message.jsonCmds.payload.uuid ? message.jsonCmds.payload.uuid : utils.generateUuid())), message);
         }
     }
