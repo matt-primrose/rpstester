@@ -12,13 +12,13 @@ Test Case Configuration File Details:
         {
             "testCaseName":"TC001",                                     // Test Case Name - Must be unique (Used by RPSTester)
             "testCaseDescription": "Activate in Admin Control Mode",    // Test Case Description - Helps tester know what each test case is testing (not used by RPSTester)
-            "include": true,                                            // Used by RPS Tester to know if test case should be included or not.  Valid values: true false
-            "expectedResult":"pass",                                    // Used by RPS Tester to know if test is possitive or negative test case.  Valid values: pass fail
+            "include": true,                                            // Used by RPS Tester to know if test case should be included or not.  Valid values: true, false
+            "expectedResult":"pass",                                    // Used by RPS Tester to know if test is possitive or negative test case.  Valid values: pass, fail
             "jsonCmds": {                                               // jsonCmds object holds the information that PPC initially sends to RPS
                 "apiKey": "key",                                        // Currently not used by RPS.  No impact by changing
                 "appVersion": "1.0.0",                                  // Currently not used by RPS.  No impact by changing
                 "message": "all's good!",                               // Currently not used by RPS.  No impact by changing
-                "method":"activation",                                  // Method request to RPS.  Valid values: activation
+                "method":"activation",                                  // Method request to RPS.  Valid values: activation, deactivation
                 "payload":{                                             // Payload is the AMT information sent up to RPS by PPC
                     "build": "3003",                                    // AMT Build number
                     "certHashes":[                                      // Array of Trusted Root Certificate Hashes.
@@ -49,7 +49,7 @@ Test Case Configuration File Details:
                     "profile":"PROFILE1",                               // Specifies the RPS profile to use for the test case
                     "sku":"16392",                                      // Currently not used by RPS.  No impact by changing
                     "username":"$$OsAdmin",                             // Used to activate AMT, however, no impact by changing this value
-                    "uuid":true,                                        // Specifies if RPS Tester should generate an AMT GUID or not.  Must be true or bad things happen with RPS Tester
+                    "uuid":true,                                        // Specifies if RPS Tester should generate an AMT GUID or not.  Valid values: true, {"random":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
                     "ver":"11.8.55"                                     // Specifies the version of AMT
                 },
                 "protocolVersion": "2.0.0",                             // Specifies the protocol version of communication between RPS and PPC.  Currently not used.  No impact by changing
@@ -60,7 +60,7 @@ Test Case Configuration File Details:
                     "allowedControlModes":[2,1],                        // Specifies allowedControlModes.  Valid values: 2 = ACM, 1 = CCM.  Currently need 2 items in the array for RPS Tester to function
                     "certChainStatus":0,                                // Currently not used by RPS.  No impact by changing
                     "configurationNonce":null,                          // RPS Tester will auto generate this value.  Changing this has no impact
-                    "currentControlMode":0                              // Currently not used by RPS.  No impact by changing
+                    "currentControlMode":0                              // Currently not used by RPS.  Valid values: 0 = Not Configured, 1 = Client Control Mode, 2 = Admin Control Mode
                 },
                 "certInjectionResponse":{                               // Covers WSMAN responses for CertInjection calls
                     "returnValue":0                                     // Valid values: 0 = Success, non-0 = Failure
@@ -69,6 +69,13 @@ Test Case Configuration File Details:
                     "returnValue":0                                     // Valid values: 0 = Success, non-0 = Failure
                 },
                 "setupResponse":{                                       // Covers WSMAN responses for Setup calls
+                    "returnValue":0                                     // Valid values: 0 = Success, non-0 = Failure
+                },
+                "setupAndConfigurationServiceResponse":{                // Covers WSMAN responses for SetupAndConfigurationService calls
+                    "provisioningMode":1,                               // Valid values: 1 = ACM, 2 = Reserved, 3 = CCM, 4 = Reserved
+                    "provisioningState":2                               // Valid values: 0 = Pre-Provisioning, 1 = In-Provisioning, 2 = Post-Provisioning
+                },
+                "deactivateResponse":{                                  // Covers WSMAN response for Unprovision call
                     "returnValue":0                                     // Valid values: 0 = Success, non-0 = Failure
                 }
             }
@@ -98,3 +105,18 @@ Test Case Configuration File Details:
     }
 }
 ```
+
+## Deactivation Test Cases
+For deactivation test cases, RPS is currently unable to deactivate devices that it didn't originally activate.  In developer mode, RPS saves the configuration information in the MPS credentials.json file.  In production mode, RPS saves the configuration information in Vault.  For testing deactivation, a dummy GUID and credentials will need to be added to one of these places depending on which mode RPS is operating.  The following entry needs to be added for the deactivation test cases to work: 
+```
+"00000000-0000-0040-8000-000000000000": {
+    "name": "00000000-0000-0040-8000-000000000000",
+    "mpsuser": "user",
+    "mpspass": "pass",
+    "amtuser": "user",
+    "amtpass": "pass"
+  }
+```
+Note: the mpsuser, mpspass, amtuser, and amtpass values are not used or validated for testing purposes
+
+Currently deactivate only works if run once.  Consecutive executions of deactivate test cases will not be counted and will cause the "Successful results" to not equal "Expected successul" and will be marked red.  This is due to the same GUID being used by all deactivation test cases.  Will look into fixing this in the future.
