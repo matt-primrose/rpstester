@@ -1618,7 +1618,7 @@
         {
             "testCaseName":"TC024",
             "testCaseDescription": "Protocol version is 1.0.0",
-            "include": true,
+            "include": false,
             "expectedResult":"fail",
             "jsonCmds": {
                 "apiKey": "key",
