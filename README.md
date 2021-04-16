@@ -1,7 +1,7 @@
 # rpstester
 A scale tester for testing RPS at scale
 
-RPSTester emulates the client side communication between PPC and RPS.  
+RPSTester emulates the client side communication between RCS and RPS.  
 
 Test Case Configuration File Details:
 ```
