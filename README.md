@@ -1,3 +1,5 @@
+This repository has been archived.
+
 # rpstester
 A scale tester for testing RPS at scale
 
